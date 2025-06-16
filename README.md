@@ -1,244 +1,272 @@
 # OpenAlex Author Disambiguation MCP Server
 
-A professional-grade Model Context Protocol (MCP) server for author disambiguation and institution resolution using the OpenAlex.org API.
+[![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-Compatible-blue)](https://modelcontextprotocol.io/)
+[![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
+[![OpenAlex](https://img.shields.io/badge/OpenAlex-API-orange)](https://openalex.org)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io/)
-[![OpenAlex API](https://img.shields.io/badge/OpenAlex-API-orange.svg)](https://openalex.org/)
+A professional Model Context Protocol (MCP) server for author disambiguation and institution resolution using the OpenAlex.org API. Built following MCP best practices with FastMCP for clean, maintainable code.
 
-## 🎯 **Overview**
+## 🎯 Features
 
-This MCP server provides comprehensive author disambiguation and institution resolution capabilities using OpenAlex's advanced machine learning-powered disambiguation system. It's designed for AI agents, research platforms, and academic applications requiring accurate author identification.
+### 🔍 **Core Capabilities**
+- **ML-Powered Author Disambiguation** - Leverage OpenAlex's advanced machine learning models
+- **Institution Resolution** - Automatic abbreviation expansion (MIT → Massachusetts Institute of Technology)
+- **ORCID Integration** - Highest accuracy matching with ORCID identifiers
+- **Confidence Scoring** - Detailed confidence analysis with match reasoning
+- **Career Analysis** - Automatic career stage determination and metrics
 
-### **Key Features**
+### 🤖 **AI Agent Optimized**
+- **Multiple Candidates** - Return ranked candidates for AI decision-making
+- **Rich Metadata** - Comprehensive author profiles with metrics and affiliations
+- **Structured Responses** - Clean, parseable output for automated systems
+- **Error Handling** - Graceful error handling with informative messages
 
-- **🔍 Advanced Author Disambiguation**: ML-powered disambiguation with confidence scoring
-- **🏛️ Institution Resolution**: Automatic abbreviation expansion (MIT → Massachusetts Institute of Technology)
-- **🤖 AI Agent Optimized**: Multiple candidate support with detailed reasoning
-- **📊 Rich Metadata**: Career analysis, publication metrics, and research topics
-- **⚡ Professional Performance**: Rate limiting, error handling, and async optimization
+### 🏛️ **Professional Grade**
+- **MCP Best Practices** - Built with FastMCP following official guidelines
+- **Tool Annotations** - Proper MCP tool annotations for optimal client integration
+- **Resource Management** - Efficient HTTP client management and cleanup
+- **Rate Limiting** - Respectful API usage with proper delays
 
-## 🚀 **Quick Start**
+## 🚀 Quick Start
 
-### **Prerequisites**
+### Prerequisites
+
 - Python 3.10 or higher
-- Internet connection for OpenAlex API access
+- MCP-compatible client (like Claude Desktop)
 
-### **Installation**
-```bash
-# Clone the repository
-git clone https://github.com/drAbreu/alex-mcp.git
-cd alex-mcp
+### Installation
 
-# Install dependencies
-pip install -r requirements.txt
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/openalex-author-disambiguation-mcp.git
+   cd openalex-author-disambiguation-mcp
+   ```
 
-# Test the installation
-python openalex_author_disambiguation.py
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Test the server:**
+   ```bash
+   python server.py
+   ```
+
+### Configuration for Claude Desktop
+
+Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "openalex-author-disambiguation": {
+      "command": "python",
+      "args": ["/absolute/path/to/server.py"]
+    }
+  }
+}
 ```
 
-### **Basic Usage**
+## 🛠️ Available Tools
+
+### 1. **disambiguate_author**
+Disambiguate an author using OpenAlex's ML-powered system.
+
+**Parameters:**
+- `name` (required): Author name
+- `affiliation` (optional): Institution name for improved accuracy
+- `research_field` (optional): Research field or topic
+- `orcid` (optional): ORCID identifier for highest confidence
+- `max_candidates` (optional): Maximum candidates to return (1-25, default: 5)
+
+**Example:**
+```
+disambiguate_author(name="Fiona Watt", affiliation="EMBO", research_field="stem cell")
+```
+
+### 2. **search_authors**
+Search for authors with advanced filtering.
+
+**Parameters:**
+- `name` (required): Author name to search
+- `affiliation` (optional): Filter by institution
+- `research_field` (optional): Filter by research field
+- `limit` (optional): Maximum results (1-25, default: 10)
+
+### 3. **get_author_profile**
+Get detailed author profile by OpenAlex ID.
+
+**Parameters:**
+- `openalex_id` (required): OpenAlex author ID
+
+### 4. **resolve_institution**
+Resolve institution names and abbreviations.
+
+**Parameters:**
+- `institution_query` (required): Institution name or abbreviation
+
+**Examples:**
+- `MIT` → `Massachusetts Institute of Technology`
+- `Stanford` → `Stanford University`
+- `Max Planck` → `Max Planck Society`
+
+### 5. **autocomplete_authors**
+Fast autocomplete search for interactive applications.
+
+**Parameters:**
+- `query` (required): Partial author name
+- `limit` (optional): Maximum suggestions (1-25, default: 10)
+
+## 📊 Example Usage
+
+### Author Disambiguation
+```python
+# Find the correct "Fiona Watt" among multiple researchers
+result = await disambiguate_author(
+    name="Fiona Watt",
+    affiliation="EMBO",
+    research_field="stem cell biology"
+)
+```
+
+**Output:**
+```
+Found 1 candidate(s) for 'Fiona Watt':
+
+1. Fiona M. Watt
+   OpenAlex ID: https://openalex.org/A5068471552
+   Confidence: 1.00
+   Match reasons: Exact name match, ORCID verified, Affiliation match
+   ORCID: https://orcid.org/0000-0001-9151-5154
+   Institutions: European Molecular Biology Organization
+   Career: Senior Researcher
+   Works: 707, Citations: 55,953
+   H-index: 126
+   Topics: Biology, Genetics, Cell biology
+```
+
+### Institution Resolution
+```python
+# Expand abbreviations automatically
+result = await resolve_institution("MIT")
+```
+
+**Output:**
+```
+Institution Resolution for 'MIT':
+
+Best Match: Massachusetts Institute of Technology
+OpenAlex ID: https://openalex.org/I63966007
+Match Score: 95/100
+Country: US
+Type: education
+Homepage: https://web.mit.edu/
+```
+
+## 🏗️ Architecture
+
+### MCP Best Practices
+- **FastMCP Framework** - Uses the official FastMCP framework for clean, maintainable code
+- **Tool Annotations** - Proper MCP annotations (`readOnlyHint`, `openWorldHint`)
+- **Error Handling** - MCP-compliant error responses with `isError` flag
+- **Resource Management** - Proper startup/shutdown lifecycle management
+
+### Code Structure
+```
+server.py                 # Main MCP server with FastMCP
+requirements.txt          # Clean, minimal dependencies
+examples/                 # Comprehensive test suite
+├── test_*.py            # Individual tool tests
+└── README.md            # Example documentation
+```
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+
 ```bash
-# Run example tests
-cd examples/
+cd examples
 python test_fiona_watt_disambiguation.py
 python test_institution_resolution.py
 ```
 
-## 🎯 **MCP Tools Available**
+## 🔧 Development
 
-Our server provides **6 professional tools**:
+### Adding New Tools
 
-### **🔍 Core Disambiguation Tools**
+Following MCP best practices with FastMCP:
 
-1. **`disambiguate_author_openalex`** - Main disambiguation with AI-optimized multi-candidate support
-2. **`search_authors_openalex`** - Advanced author search with multiple filters
-3. **`get_author_by_openalex_id`** - Detailed profile retrieval by OpenAlex ID
-4. **`autocomplete_authors_openalex`** - Fast type-ahead search for interactive applications
-
-### **🏛️ Institution Resolution Tools**
-
-5. **`resolve_institution_openalex`** - Single institution resolution and abbreviation expansion
-6. **`resolve_multiple_institutions_openalex`** - Batch institution processing for efficiency
-
-## 📊 **Test Results**
-
-### **✅ Fiona Watt (EMBO Director) - Perfect Success**
-All name variations resolve to the same author:
-- `F. Watt` → Fiona M. Watt (https://openalex.org/A5068471552)
-- `Fiona Watt` → Fiona M. Watt (https://openalex.org/A5068471552)
-- `Fiona M. Watt` → Fiona M. Watt (https://openalex.org/A5068471552)
-- `Watt FM` → Fiona M. Watt (https://openalex.org/A5068471552)
-
-**Profile Details:**
-- **ORCID**: https://orcid.org/0000-0001-9151-5154
-- **Institution**: European Molecular Biology Organization (EMBO)
-- **Career Stage**: Senior Researcher (60% last-author papers)
-- **H-index**: 126, **Citations**: 55,953, **Works**: 707
-
-### **✅ Institution Resolution Success**
-- `Stanford` → Stanford University ✅
-- `Harvard` → Harvard University ✅
-- `Oxford` → University of Oxford ✅
-- `Cambridge` → University of Cambridge ✅
-- `Max Planck` → Max Planck Society ✅
-
-## 💡 **Use Cases**
-
-### **Perfect For:**
-- **Academic Research**: Author identification for citation analysis
-- **AI Agents**: Automated author disambiguation in research pipelines
-- **Research Platforms**: Scholar profile creation and management
-- **Publication Systems**: Author validation and deduplication
-- **Grant Applications**: Author identity verification
-- **Bibliometrics**: Research impact analysis and collaboration mapping
-
-### **Example Scenarios:**
-1. **Disambiguating "J. Smith"** with institutional context
-2. **Expanding "MIT"** to "Massachusetts Institute of Technology"
-3. **Finding all works by a specific researcher**
-4. **Validating author identity with ORCID**
-5. **Analyzing career progression and seniority**
-6. **Batch processing multiple author queries**
-
-## 🔧 **Technical Features**
-
-### **✅ Advanced Disambiguation**
-- ML-powered OpenAlex disambiguation engine
-- Multi-factor confidence scoring
-- ORCID integration for highest accuracy
-- Research field context matching
-- Alternative name recognition
-
-### **🏛️ Institution Intelligence**
-- Automatic abbreviation expansion
-- Intelligent partial name matching
-- Batch processing for efficiency
-- Confidence scoring for institution matches
-- Alternative name and alias recognition
-
-### **🤖 AI Agent Optimization**
-- Multiple candidate returns with ranking
-- Detailed confidence reasoning
-- Structured decision factors
-- Career stage analysis
-- Authorship pattern analysis
-
-### **📊 Professional Metadata**
-- Comprehensive career metrics
-- Publication and citation analysis
-- Research topic extraction
-- Institutional history tracking
-- Recent works sampling
-
-### **🔧 Technical Excellence**
-- Full MCP protocol compliance
-- Rate limiting and error handling
-- Structured JSON responses
-- Comprehensive logging
-- Async/await optimization
-
-## 📁 **Project Structure**
-
-```
-alex-mcp/
-├── openalex_author_disambiguation.py  # Main MCP server
-├── requirements.txt                   # Dependencies
-├── setup.py                          # Package setup
-├── README.md                         # This file
-├── MCP_TOOLS_REFERENCE.md            # Complete tools documentation
-├── PROPOSED_ADDITIONAL_TOOLS.md      # Future expansion plans
-├── IMPLEMENTATION_SUMMARY.md         # Technical details
-└── examples/                         # Test suite and examples
-    ├── README.md                     # Examples documentation
-    ├── test_fiona_watt_disambiguation.py
-    ├── test_institution_resolution.py
-    ├── test_comprehensive_disambiguation.py
-    ├── test_enhanced_jorge_disambiguation.py
-    ├── test_professional_disambiguation_system.py
-    └── test_openalex_server.py
+```python
+@mcp.tool(
+    annotations={
+        "title": "Your Tool Title",
+        "readOnlyHint": True,  # If tool doesn't modify state
+        "openWorldHint": True  # If tool accesses external APIs
+    }
+)
+async def your_tool(param1: str, param2: int = 10) -> str:
+    """
+    Tool description for the LLM.
+    
+    Args:
+        param1: Description of required parameter
+        param2: Description of optional parameter with default
+    """
+    # Implementation
+    return "Result"
 ```
 
-## 🚀 **Running Examples**
+### Error Handling
 
-### **Individual Tests**
-```bash
-cd examples/
+Follow MCP error handling patterns:
 
-# Test Fiona Watt disambiguation
-python test_fiona_watt_disambiguation.py
-
-# Test institution resolution
-python test_institution_resolution.py
-
-# Test complete professional system
-python test_professional_disambiguation_system.py
-
-# Test enhanced Jorge disambiguation
-python test_enhanced_jorge_disambiguation.py
-
-# Test comprehensive multi-author
-python test_comprehensive_disambiguation.py
-
-# Test general server functionality
-python test_openalex_server.py
+```python
+try:
+    # Tool logic
+    return "Success result"
+except Exception as e:
+    logger.error(f"Error in tool: {e}")
+    return f"Error: {str(e)}"
 ```
 
-### **Run All Examples**
-```bash
-cd examples/
-for test in test_*.py; do
-    echo "Running $test..."
-    python "$test"
-    echo "---"
-done
-```
+## 📚 OpenAlex Integration
 
-## 🔮 **Future Expansion**
+### API Features Used
+- **Author Search** - Advanced search with filters
+- **Author Profiles** - Comprehensive author data
+- **Institution Search** - Institution resolution and metadata
+- **Autocomplete** - Fast type-ahead suggestions
 
-We have identified **12 additional tools** that would transform this into a comprehensive research intelligence platform:
+### Rate Limiting
+- Respectful API usage with built-in delays
+- Efficient HTTP client with connection pooling
+- Proper resource cleanup on shutdown
 
-- **📄 Works & Publications**: Publication search, collaboration discovery, impact analysis
-- **💡 Topics & Research Areas**: Trending topics, research area discovery
-- **📚 Sources & Venues**: Journal analysis, conference discovery
-- **💰 Funding & Publishers**: Grant opportunities, publisher analysis
-- **🔍 Advanced Analytics**: Network analysis, text classification
-
-See `PROPOSED_ADDITIONAL_TOOLS.md` for detailed expansion plans.
-
-## 📚 **Documentation**
-
-- **[MCP Tools Reference](MCP_TOOLS_REFERENCE.md)** - Complete API documentation
-- **[Examples Documentation](examples/README.md)** - Usage examples and test results
-- **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
-- **[Proposed Extensions](PROPOSED_ADDITIONAL_TOOLS.md)** - Future development roadmap
-
-## 🤝 **Contributing**
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Follow MCP best practices
+4. Add comprehensive tests
+5. Submit a pull request
 
-## 📄 **License**
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## 🙏 **Acknowledgments**
+## 🙏 Acknowledgments
 
-- **[OpenAlex](https://openalex.org/)** - For providing the excellent open academic database and API
-- **[Model Context Protocol](https://modelcontextprotocol.io/)** - For the MCP specification and Python SDK
-- **[OurResearch](https://ourresearch.org/)** - For maintaining OpenAlex as a public good
+- [OpenAlex](https://openalex.org) for providing the comprehensive academic database
+- [Model Context Protocol](https://modelcontextprotocol.io) for the excellent framework
+- [FastMCP](https://github.com/modelcontextprotocol/python-sdk) for the clean Python implementation
 
-## 📞 **Support**
+## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/drAbreu/alex-mcp/issues)
-- **Documentation**: [Project Wiki](https://github.com/drAbreu/alex-mcp/wiki)
-- **OpenAlex Support**: [OpenAlex Help](https://openalex.org/help)
+- **Issues**: [GitHub Issues](https://github.com/your-username/openalex-author-disambiguation-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-username/openalex-author-disambiguation-mcp/discussions)
+- **MCP Documentation**: [Model Context Protocol](https://modelcontextprotocol.io)
 
 ---
 
 **Built with ❤️ for the research community**
-
-*Leveraging OpenAlex's state-of-the-art author disambiguation to power the next generation of research tools and AI agents.*

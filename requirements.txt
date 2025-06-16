@@ -1,4 +1,11 @@
-mcp>=1.9.0
+# OpenAlex Author Disambiguation MCP Server Dependencies
+# Following MCP best practices with FastMCP
+
+# MCP SDK - Latest version with FastMCP support
+mcp>=1.2.0
+
+# HTTP client for OpenAlex API
 httpx>=0.25.0
-pydantic>=2.0.0
-python-dotenv>=1.0.0
+
+# Optional: For enhanced logging and debugging
+rich>=13.0.0
