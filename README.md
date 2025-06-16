@@ -1,9 +1,13 @@
-# OpenAlex Author Disambiguation MCP Server
+<div align="center">
+  <img src="img/oam_logo_rectangular.png" alt="OpenAlex MCP Server" width="600"/>
+  
+  # OpenAlex Author Disambiguation MCP Server
 
-[![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-Compatible-blue)](https://modelcontextprotocol.io/)
-[![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
-[![OpenAlex](https://img.shields.io/badge/OpenAlex-API-orange)](https://openalex.org)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+  [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-Compatible-blue)](https://modelcontextprotocol.io/)
+  [![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
+  [![OpenAlex](https://img.shields.io/badge/OpenAlex-API-orange)](https://openalex.org)
+  [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+</div>
 
 A professional Model Context Protocol (MCP) server for author disambiguation and institution resolution using the OpenAlex.org API. Built following MCP best practices with FastMCP for clean, maintainable code.
 
