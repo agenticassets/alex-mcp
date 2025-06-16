@@ -675,6 +675,453 @@ class OpenAlexAuthorDisambiguationServer:
             logger.error(f"Error in autocomplete: {e}")
             return []
 
+    # ========================================
+    # PHASE 1 EXPANSION: Core Research Tools
+    # ========================================
+
+    async def search_works_by_author(
+        self,
+        author_id: Optional[str] = None,
+        author_name: Optional[str] = None,
+        publication_year_range: Optional[str] = None,
+        source_type: Optional[str] = None,
+        topic_filter: Optional[str] = None,
+        sort_by: str = "publication_date",
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Find all publications by a specific author with advanced filtering
+        
+        Args:
+            author_id: OpenAlex author ID (preferred)
+            author_name: Author name (if ID not available)
+            publication_year_range: e.g., "2020-2024" or "2020"
+            source_type: "journal", "conference", "book", "repository", etc.
+            topic_filter: Filter by research topics/concepts
+            sort_by: "publication_date", "cited_by_count", "relevance"
+            limit: Maximum number of works to return
+        """
+        try:
+            if not author_id and not author_name:
+                raise ValueError("Either author_id or author_name must be provided")
+            
+            # If only name provided, try to find the author first
+            if not author_id and author_name:
+                authors = await self.search_authors(author_name, limit=1)
+                if not authors:
+                    return {"error": f"No author found with name: {author_name}", "works": []}
+                author_id = authors[0].openalex_id
+            
+            # Clean author ID
+            clean_author_id = author_id.replace("https://openalex.org/", "")
+            
+            # Build filter parameters
+            filters = [f"author.id:{clean_author_id}"]
+            
+            # Add year range filter
+            if publication_year_range:
+                if "-" in publication_year_range:
+                    start_year, end_year = publication_year_range.split("-")
+                    filters.append(f"publication_year:{start_year}-{end_year}")
+                else:
+                    filters.append(f"publication_year:{publication_year_range}")
+            
+            # Add source type filter
+            if source_type:
+                filters.append(f"type:{source_type}")
+            
+            # Add topic filter
+            if topic_filter:
+                filters.append(f"concepts.display_name.search:{topic_filter}")
+            
+            # Set sort parameter
+            sort_options = {
+                "publication_date": "publication_date:desc",
+                "cited_by_count": "cited_by_count:desc",
+                "relevance": "relevance_score:desc"
+            }
+            sort_param = sort_options.get(sort_by, "publication_date:desc")
+            
+            # Make API request with simplified select to avoid 403 errors
+            url = f"{self.base_url}/works"
+            params = {
+                "filter": ",".join(filters),
+                "sort": sort_param,
+                "per-page": min(limit, 200),  # OpenAlex max is 200
+                "select": "id,title,publication_year,publication_date,type,cited_by_count,is_oa,authorships,concepts,primary_location,doi"
+            }
+            
+            response = await self.http_client.get(url, params=params, headers=self.headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            works = data.get("results", [])
+            
+            # Process works for better presentation
+            processed_works = []
+            for work in works:
+                # Find author's position in this work
+                author_position = None
+                total_authors = 0
+                authorships = work.get("authorships", [])
+                total_authors = len(authorships)
+                
+                for i, authorship in enumerate(authorships):
+                    if authorship.get("author", {}).get("id", "").replace("https://openalex.org/", "") == clean_author_id:
+                        author_position = i + 1
+                        break
+                
+                # Extract key concepts
+                concepts = work.get("concepts", [])
+                top_concepts = [c.get("display_name") for c in concepts[:3]]
+                
+                # Extract venue information
+                primary_location = work.get("primary_location", {})
+                venue_name = primary_location.get("source", {}).get("display_name", "Unknown")
+                
+                processed_work = {
+                    "id": work.get("id"),
+                    "title": work.get("title", ""),
+                    "publication_year": work.get("publication_year"),
+                    "publication_date": work.get("publication_date"),
+                    "type": work.get("type", ""),
+                    "venue": venue_name,
+                    "cited_by_count": work.get("cited_by_count", 0),
+                    "is_open_access": work.get("is_oa", False),
+                    "doi": work.get("doi"),
+                    "author_position": author_position,
+                    "total_authors": total_authors,
+                    "top_concepts": top_concepts,
+                    "url": work.get("id", "")
+                }
+                processed_works.append(processed_work)
+            
+            # Calculate summary statistics
+            total_citations = sum(work["cited_by_count"] for work in processed_works)
+            open_access_count = sum(1 for work in processed_works if work["is_open_access"])
+            
+            # Analyze authorship positions
+            first_author_count = sum(1 for work in processed_works if work["author_position"] == 1)
+            last_author_count = sum(1 for work in processed_works if work["author_position"] == work["total_authors"])
+            
+            result = {
+                "query": {
+                    "author_id": author_id,
+                    "author_name": author_name,
+                    "publication_year_range": publication_year_range,
+                    "source_type": source_type,
+                    "topic_filter": topic_filter,
+                    "sort_by": sort_by,
+                    "limit": limit
+                },
+                "summary": {
+                    "total_works_found": len(processed_works),
+                    "total_citations": total_citations,
+                    "open_access_percentage": (open_access_count / len(processed_works) * 100) if processed_works else 0,
+                    "first_author_papers": first_author_count,
+                    "last_author_papers": last_author_count,
+                    "average_citations_per_paper": total_citations / len(processed_works) if processed_works else 0
+                },
+                "works": processed_works,
+                "data_source": "OpenAlex.org"
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error searching works by author: {e}")
+            return {"error": str(e), "works": []}
+
+    async def get_work_details(
+        self,
+        work_id: str,
+        include_citations: bool = False,
+        include_references: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get comprehensive details about a specific publication
+        
+        Args:
+            work_id: OpenAlex work ID
+            include_citations: Include works that cite this work
+            include_references: Include works referenced by this work
+        """
+        try:
+            # Clean work ID
+            clean_work_id = work_id.replace("https://openalex.org/", "")
+            if not clean_work_id.startswith("W"):
+                clean_work_id = f"W{clean_work_id}"
+            
+            # Get main work details
+            url = f"{self.base_url}/works/{clean_work_id}"
+            response = await self.http_client.get(url, headers=self.headers)
+            response.raise_for_status()
+            work_data = response.json()
+            
+            # Process authorship information
+            authorships = work_data.get("authorships", [])
+            processed_authors = []
+            for i, authorship in enumerate(authorships):
+                author = authorship.get("author", {})
+                institutions = authorship.get("institutions", [])
+                
+                processed_author = {
+                    "position": i + 1,
+                    "name": author.get("display_name", ""),
+                    "id": author.get("id", ""),
+                    "orcid": author.get("orcid"),
+                    "institutions": [inst.get("display_name", "") for inst in institutions]
+                }
+                processed_authors.append(processed_author)
+            
+            # Process concepts/topics
+            concepts = work_data.get("concepts", [])
+            processed_concepts = []
+            for concept in concepts:
+                processed_concepts.append({
+                    "name": concept.get("display_name", ""),
+                    "level": concept.get("level", 0),
+                    "score": concept.get("score", 0.0)
+                })
+            
+            # Extract venue information
+            primary_location = work_data.get("primary_location", {})
+            venue_info = {
+                "name": primary_location.get("source", {}).get("display_name", ""),
+                "type": primary_location.get("source", {}).get("type", ""),
+                "issn": primary_location.get("source", {}).get("issn", []),
+                "is_oa": primary_location.get("is_oa", False),
+                "version": primary_location.get("version", "")
+            }
+            
+            # Build main result
+            result = {
+                "work_details": {
+                    "id": work_data.get("id"),
+                    "title": work_data.get("title", ""),
+                    "display_name": work_data.get("display_name", ""),
+                    "publication_year": work_data.get("publication_year"),
+                    "publication_date": work_data.get("publication_date"),
+                    "type": work_data.get("type", ""),
+                    "doi": work_data.get("doi"),
+                    "url": work_data.get("id", ""),
+                    "is_open_access": work_data.get("is_oa", False),
+                    "cited_by_count": work_data.get("cited_by_count", 0),
+                    "biblio": work_data.get("biblio", {}),
+                    "language": work_data.get("language"),
+                    "abstract": work_data.get("abstract_inverted_index")
+                },
+                "venue": venue_info,
+                "authors": processed_authors,
+                "concepts": processed_concepts,
+                "open_access": work_data.get("open_access", {}),
+                "data_source": "OpenAlex.org"
+            }
+            
+            # Add citations if requested
+            if include_citations:
+                await asyncio.sleep(0.5)  # Rate limiting
+                citations_url = f"{self.base_url}/works"
+                citations_params = {
+                    "filter": f"cites:{clean_work_id}",
+                    "per-page": 50,
+                    "select": "id,title,publication_year,cited_by_count,authorships"
+                }
+                
+                try:
+                    citations_response = await self.http_client.get(
+                        citations_url, params=citations_params, headers=self.headers
+                    )
+                    citations_response.raise_for_status()
+                    citations_data = citations_response.json()
+                    
+                    citing_works = []
+                    for citing_work in citations_data.get("results", []):
+                        citing_works.append({
+                            "id": citing_work.get("id"),
+                            "title": citing_work.get("title", ""),
+                            "publication_year": citing_work.get("publication_year"),
+                            "cited_by_count": citing_work.get("cited_by_count", 0),
+                            "first_author": citing_work.get("authorships", [{}])[0].get("author", {}).get("display_name", "") if citing_work.get("authorships") else ""
+                        })
+                    
+                    result["citations"] = {
+                        "total_citing_works": len(citing_works),
+                        "citing_works_sample": citing_works[:20]  # Limit sample
+                    }
+                except Exception as e:
+                    logger.warning(f"Error fetching citations: {e}")
+                    result["citations"] = {"error": "Could not fetch citations"}
+            
+            # Add references if requested
+            if include_references:
+                await asyncio.sleep(0.5)  # Rate limiting
+                references_url = f"{self.base_url}/works"
+                references_params = {
+                    "filter": f"cited_by:{clean_work_id}",
+                    "per-page": 50,
+                    "select": "id,title,publication_year,cited_by_count,authorships"
+                }
+                
+                try:
+                    references_response = await self.http_client.get(
+                        references_url, params=references_params, headers=self.headers
+                    )
+                    references_response.raise_for_status()
+                    references_data = references_response.json()
+                    
+                    referenced_works = []
+                    for ref_work in references_data.get("results", []):
+                        referenced_works.append({
+                            "id": ref_work.get("id"),
+                            "title": ref_work.get("title", ""),
+                            "publication_year": ref_work.get("publication_year"),
+                            "cited_by_count": ref_work.get("cited_by_count", 0),
+                            "first_author": ref_work.get("authorships", [{}])[0].get("author", {}).get("display_name", "") if ref_work.get("authorships") else ""
+                        })
+                    
+                    result["references"] = {
+                        "total_referenced_works": len(referenced_works),
+                        "referenced_works_sample": referenced_works[:20]  # Limit sample
+                    }
+                except Exception as e:
+                    logger.warning(f"Error fetching references: {e}")
+                    result["references"] = {"error": "Could not fetch references"}
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error getting work details for {work_id}: {e}")
+            return {"error": str(e)}
+
+    async def search_topics(
+        self,
+        topic_query: str,
+        level: Optional[int] = None,
+        related_topics: bool = False,
+        limit: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Search and explore research topics/concepts
+        
+        Args:
+            topic_query: Topic name or description to search for
+            level: Topic hierarchy level (0-5, where 0 is most general)
+            related_topics: Include related topics in results
+            limit: Maximum number of topics to return
+        """
+        try:
+            # Build search parameters with simplified select to avoid 403 errors
+            url = f"{self.base_url}/topics"
+            params = {
+                "search": topic_query,
+                "per-page": min(limit, 200),
+                "select": "id,display_name,description,keywords,level,works_count,cited_by_count,subfield,field,domain"
+            }
+            
+            # Add level filter if specified
+            if level is not None:
+                params["filter"] = f"level:{level}"
+            
+            response = await self.http_client.get(url, params=params, headers=self.headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            topics = data.get("results", [])
+            processed_topics = []
+            
+            for topic in topics:
+                # Calculate relevance score based on search query
+                display_name = topic.get("display_name", "").lower()
+                query_lower = topic_query.lower()
+                
+                relevance_score = 0.0
+                if query_lower == display_name:
+                    relevance_score = 1.0
+                elif query_lower in display_name:
+                    relevance_score = 0.8
+                elif any(word in display_name for word in query_lower.split()):
+                    relevance_score = 0.6
+                else:
+                    relevance_score = 0.4
+                
+                processed_topic = {
+                    "id": topic.get("id"),
+                    "name": topic.get("display_name", ""),
+                    "description": topic.get("description", ""),
+                    "level": topic.get("level", 0),
+                    "keywords": topic.get("keywords", []),
+                    "works_count": topic.get("works_count", 0),
+                    "cited_by_count": topic.get("cited_by_count", 0),
+                    "hierarchy": {
+                        "domain": topic.get("domain", {}).get("display_name", "") if topic.get("domain") else "",
+                        "field": topic.get("field", {}).get("display_name", "") if topic.get("field") else "",
+                        "subfield": topic.get("subfield", {}).get("display_name", "") if topic.get("subfield") else ""
+                    },
+                    "relevance_score": relevance_score,
+                    "url": topic.get("id", "")
+                }
+                processed_topics.append(processed_topic)
+            
+            # Sort by relevance score and works count
+            processed_topics.sort(key=lambda x: (x["relevance_score"], x["works_count"]), reverse=True)
+            
+            result = {
+                "query": {
+                    "topic_query": topic_query,
+                    "level": level,
+                    "related_topics": related_topics,
+                    "limit": limit
+                },
+                "summary": {
+                    "total_topics_found": len(processed_topics),
+                    "search_timestamp": datetime.now().isoformat()
+                },
+                "topics": processed_topics,
+                "data_source": "OpenAlex.org"
+            }
+            
+            # Add related topics if requested
+            if related_topics and processed_topics:
+                # Get related topics for the top result
+                top_topic_id = processed_topics[0]["id"].replace("https://openalex.org/", "")
+                await asyncio.sleep(0.5)  # Rate limiting
+                
+                try:
+                    related_url = f"{self.base_url}/topics"
+                    related_params = {
+                        "filter": f"subfield.id:{top_topic_id}",
+                        "per-page": 10,
+                        "select": "id,display_name,level,works_count"
+                    }
+                    
+                    related_response = await self.http_client.get(
+                        related_url, params=related_params, headers=self.headers
+                    )
+                    related_response.raise_for_status()
+                    related_data = related_response.json()
+                    
+                    related_topics_list = []
+                    for related_topic in related_data.get("results", []):
+                        related_topics_list.append({
+                            "id": related_topic.get("id"),
+                            "name": related_topic.get("display_name", ""),
+                            "level": related_topic.get("level", 0),
+                            "works_count": related_topic.get("works_count", 0)
+                        })
+                    
+                    result["related_topics"] = related_topics_list
+                    
+                except Exception as e:
+                    logger.warning(f"Error fetching related topics: {e}")
+                    result["related_topics"] = []
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error searching topics: {e}")
+            return {"error": str(e), "topics": []}
+
     def setup_tools(self):
         """Setup MCP tools for OpenAlex author disambiguation"""
         
@@ -828,6 +1275,108 @@ class OpenAlexAuthorDisambiguationServer:
                             },
                             "required": ["institution_queries"]
                         }
+                    ),
+                    # PHASE 1 EXPANSION: Core Research Tools
+                    Tool(
+                        name="search_works_by_author_openalex",
+                        description="Find all publications by a specific author with advanced filtering. Essential for research impact analysis, CV generation, and collaboration discovery.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "author_id": {
+                                    "type": "string",
+                                    "description": "OpenAlex author ID (preferred for accuracy)"
+                                },
+                                "author_name": {
+                                    "type": "string",
+                                    "description": "Author name (if ID not available)"
+                                },
+                                "publication_year_range": {
+                                    "type": "string",
+                                    "description": "Year range filter (e.g., '2020-2024' or '2020')"
+                                },
+                                "source_type": {
+                                    "type": "string",
+                                    "description": "Publication type filter: 'journal', 'conference', 'book', 'repository', etc."
+                                },
+                                "topic_filter": {
+                                    "type": "string",
+                                    "description": "Filter by research topics/concepts"
+                                },
+                                "sort_by": {
+                                    "type": "string",
+                                    "description": "Sort order: 'publication_date', 'cited_by_count', 'relevance' (default: publication_date)",
+                                    "default": "publication_date"
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum number of works to return (default: 20, max: 200)",
+                                    "default": 20,
+                                    "minimum": 1,
+                                    "maximum": 200
+                                }
+                            },
+                            "anyOf": [
+                                {"required": ["author_id"]},
+                                {"required": ["author_name"]}
+                            ]
+                        }
+                    ),
+                    Tool(
+                        name="get_work_details_openalex",
+                        description="Get comprehensive details about a specific publication including authors, venue, concepts, and optionally citations and references.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "work_id": {
+                                    "type": "string",
+                                    "description": "OpenAlex work ID (e.g., 'W2741809807' or full URL)"
+                                },
+                                "include_citations": {
+                                    "type": "boolean",
+                                    "description": "Include works that cite this publication (default: false)",
+                                    "default": False
+                                },
+                                "include_references": {
+                                    "type": "boolean",
+                                    "description": "Include works referenced by this publication (default: false)",
+                                    "default": False
+                                }
+                            },
+                            "required": ["work_id"]
+                        }
+                    ),
+                    Tool(
+                        name="search_topics_openalex",
+                        description="Search and explore research topics/concepts with hierarchy information. Important for research area discovery and trend analysis.",
+                        inputSchema={
+                            "type": "object",
+                            "properties": {
+                                "topic_query": {
+                                    "type": "string",
+                                    "description": "Topic name or description to search for"
+                                },
+                                "level": {
+                                    "type": "integer",
+                                    "description": "Topic hierarchy level (0-5, where 0 is most general)",
+                                    "minimum": 0,
+                                    "maximum": 5
+                                },
+                                "related_topics": {
+                                    "type": "boolean",
+                                    "description": "Include related topics in results (default: false)",
+                                    "default": False
+                                },
+                                "limit": {
+                                    "type": "integer",
+                                    "description": "Maximum number of topics to return (default: 20, max: 200)",
+                                    "default": 20,
+                                    "minimum": 1,
+                                    "maximum": 200
+                                }
+                            },
+                            "required": ["topic_query"]
+                        }
                     )
                 ]
             )
@@ -911,6 +1460,42 @@ class OpenAlexAuthorDisambiguationServer:
                     }
                     return CallToolResult(
                         content=[TextContent(type="text", text=json.dumps(result, indent=2))]
+                    )
+                
+                # PHASE 1 EXPANSION: Core Research Tools
+                elif name == "search_works_by_author_openalex":
+                    result = await self.search_works_by_author(
+                        author_id=arguments.get("author_id"),
+                        author_name=arguments.get("author_name"),
+                        publication_year_range=arguments.get("publication_year_range"),
+                        source_type=arguments.get("source_type"),
+                        topic_filter=arguments.get("topic_filter"),
+                        sort_by=arguments.get("sort_by", "publication_date"),
+                        limit=arguments.get("limit", 20)
+                    )
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
+                    )
+                
+                elif name == "get_work_details_openalex":
+                    result = await self.get_work_details(
+                        work_id=arguments["work_id"],
+                        include_citations=arguments.get("include_citations", False),
+                        include_references=arguments.get("include_references", False)
+                    )
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
+                    )
+                
+                elif name == "search_topics_openalex":
+                    result = await self.search_topics(
+                        topic_query=arguments["topic_query"],
+                        level=arguments.get("level"),
+                        related_topics=arguments.get("related_topics", False),
+                        limit=arguments.get("limit", 20)
+                    )
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
                     )
                 
                 else:
