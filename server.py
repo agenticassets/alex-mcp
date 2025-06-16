@@ -928,7 +928,7 @@ async def analyze_text_aboutness(
     """
     Analyze text to determine research topics, keywords, and concepts.
     
-    Uses OpenAlex's AI models to classify text and identify
+    Uses OpenAlex's machine learning models to classify text and identify
     relevant research areas, topics, and concepts.
     
     Args:

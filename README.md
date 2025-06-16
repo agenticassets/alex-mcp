@@ -20,8 +20,8 @@ A professional Model Context Protocol (MCP) server for author disambiguation and
 - **Confidence Scoring** - Detailed confidence analysis with match reasoning
 - **Career Analysis** - Automatic career stage determination and metrics
 
-### 🤖 **AI Agent Optimized**
-- **Multiple Candidates** - Return ranked candidates for AI decision-making
+### 🤖 **Agent Optimized**
+- **Multiple Candidates** - Return ranked candidates for automated decision-making
 - **Rich Metadata** - Comprehensive author profiles with metrics and affiliations
 - **Structured Responses** - Clean, parseable output for automated systems
 - **Error Handling** - Graceful error handling with informative messages
@@ -57,20 +57,84 @@ A professional Model Context Protocol (MCP) server for author disambiguation and
    python server.py
    ```
 
-### Configuration for Claude Desktop
+## ⚙️ MCP Configuration
 
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+### Claude Desktop Configuration
+
+Add to your Claude Desktop configuration file:
+
+**macOS/Linux:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "openalex-author-disambiguation": {
-      "command": "python",
+      "command": "python3.10",
+      "args": ["/absolute/path/to/your/project/server.py"],
+      "env": {
+        "PYTHONPATH": "/absolute/path/to/your/project"
+      }
+    }
+  }
+}
+```
+
+### Alternative Configuration Options
+
+#### Using Python Virtual Environment
+```json
+{
+  "mcpServers": {
+    "openalex-author-disambiguation": {
+      "command": "/path/to/your/venv/bin/python",
       "args": ["/absolute/path/to/server.py"]
     }
   }
 }
 ```
+
+#### Using UV (Python Package Manager)
+```json
+{
+  "mcpServers": {
+    "openalex-author-disambiguation": {
+      "command": "uv",
+      "args": ["run", "python", "/absolute/path/to/server.py"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+### Configuration Verification
+
+After adding the configuration:
+
+1. **Restart Claude Desktop** completely
+2. **Check server status** in Claude Desktop settings
+3. **Test a simple command** like:
+   ```
+   Can you help me disambiguate the author "John Smith"?
+   ```
+
+### Troubleshooting MCP Connection
+
+If the server doesn't appear in Claude Desktop:
+
+1. **Check Python version**: Ensure Python 3.10+ is installed
+2. **Verify file paths**: Use absolute paths in configuration
+3. **Check permissions**: Ensure server.py is executable
+4. **View logs**: Check Claude Desktop logs for error messages
+5. **Test manually**: Run `python3.10 server.py` to verify it starts
+
+### MCP Server Information
+
+- **Server Name**: `openalex-author-disambiguation`
+- **Protocol**: Model Context Protocol (MCP)
+- **Tools**: 10 professional research intelligence tools
+- **Resources**: None (read-only server)
+- **Prompts**: None (tool-based interaction)
 
 ## 🛠️ Available Tools (10 Professional Tools)
 
@@ -148,7 +212,7 @@ Search and explore research topics with detailed information.
 - `limit` (optional): Maximum topics to return (1-50, default: 20)
 
 #### 9. **analyze_text_aboutness**
-Analyze text to determine research topics, keywords, and concepts using AI.
+Analyze text to determine research topics, keywords, and concepts using machine learning.
 
 **Parameters:**
 - `title` (required): Title of the text to analyze

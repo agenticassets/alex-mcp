@@ -177,7 +177,7 @@ async def test_expanded_server():
         print("   • search_works - Find publications with advanced filtering")
         print("   • get_work_details - Detailed publication information")
         print("   • search_topics - Explore research topics and trends")
-        print("   • analyze_text_aboutness - AI-powered text classification")
+        print("   • analyze_text_aboutness - ML-powered text classification")
         print("   • search_sources - Find journals and publication venues")
         print()
         print("📊 ORIGINAL AUTHOR TOOLS:")
