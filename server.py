@@ -603,6 +603,497 @@ async def autocomplete_authors(query: str, limit: int = 10) -> str:
         logger.error(f"Error in autocomplete_authors: {e}")
         return f"Error: {str(e)}"
 
+# ============================================================================
+# ADDITIONAL HIGH-VALUE TOOLS - Research Intelligence Expansion
+# ============================================================================
+
+@mcp.tool(
+    annotations={
+        "title": "Search Works",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_works(
+    query: str,
+    author_name: str = None,
+    publication_year: str = None,
+    source_type: str = None,
+    topic: str = None,
+    sort_by: str = "relevance",
+    limit: int = 20
+) -> str:
+    """
+    Search for scholarly works (publications) with advanced filtering.
+    
+    Find research papers, books, datasets, and other scholarly documents
+    across OpenAlex's database of 240M+ works.
+    
+    Args:
+        query: Search query for title, abstract, or content
+        author_name: Filter by author name
+        publication_year: Filter by year (e.g., "2023" or "2020-2023")
+        source_type: Filter by type ("journal-article", "book", "dataset", etc.)
+        topic: Filter by research topic or field
+        sort_by: Sort order ("relevance", "cited_by_count", "publication_date")
+        limit: Maximum number of results (1-100, default: 20)
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 100),
+            "select": "id,title,publication_year,type,cited_by_count,authorships,primary_topic,open_access,doi"
+        }
+        
+        # Build filters
+        filters = []
+        
+        if author_name:
+            filters.append(f'authorships.author.display_name.search:"{author_name}"')
+        
+        if publication_year:
+            if "-" in publication_year:
+                start_year, end_year = publication_year.split("-")
+                filters.append(f"publication_year:{start_year}-{end_year}")
+            else:
+                filters.append(f"publication_year:{publication_year}")
+        
+        if source_type:
+            filters.append(f"type:{source_type}")
+        
+        if topic:
+            filters.append(f'primary_topic.display_name.search:"{topic}"')
+        
+        if filters:
+            params["filter"] = ",".join(filters)
+        
+        # Set sort order
+        sort_options = {
+            "relevance": "relevance_score:desc",
+            "cited_by_count": "cited_by_count:desc",
+            "publication_date": "publication_date:desc"
+        }
+        params["sort"] = sort_options.get(sort_by, "relevance_score:desc")
+        
+        response = await client.get("/works", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        works = data.get("results", [])
+        if not works:
+            return f"No works found for query: '{query}'"
+        
+        result = f"Found {len(works)} work(s) for '{query}':\n\n"
+        
+        for i, work in enumerate(works, 1):
+            # Extract authors
+            authorships = work.get("authorships", [])
+            authors = [auth.get("author", {}).get("display_name", "") for auth in authorships[:3]]
+            author_text = ", ".join(authors)
+            if len(authorships) > 3:
+                author_text += f" (+{len(authorships) - 3} more)"
+            
+            # Extract topic
+            primary_topic = work.get("primary_topic", {})
+            topic_name = primary_topic.get("display_name", "Unknown topic")
+            
+            result += f"{i}. {work.get('title', 'Untitled')}\n"
+            result += f"   Authors: {author_text}\n"
+            result += f"   Year: {work.get('publication_year', 'Unknown')}\n"
+            result += f"   Type: {work.get('type', 'Unknown')}\n"
+            result += f"   Citations: {work.get('cited_by_count', 0):,}\n"
+            result += f"   Topic: {topic_name}\n"
+            result += f"   Open Access: {work.get('open_access', {}).get('is_oa', False)}\n"
+            if work.get('doi'):
+                result += f"   DOI: {work.get('doi')}\n"
+            result += f"   OpenAlex ID: {work.get('id', '')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_works: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Get Work Details",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def get_work_details(work_id: str) -> str:
+    """
+    Get comprehensive details about a specific scholarly work.
+    
+    Retrieves detailed information about a publication including
+    full author list, citations, references, and metadata.
+    
+    Args:
+        work_id: OpenAlex work ID (e.g., 'W2741809807' or full URL)
+    """
+    try:
+        client = await get_http_client()
+        
+        # Clean work ID
+        clean_id = work_id.replace("https://openalex.org/", "")
+        if not clean_id.startswith("W"):
+            clean_id = f"W{clean_id}"
+        
+        response = await client.get(f"/works/{clean_id}")
+        response.raise_for_status()
+        work = response.json()
+        
+        # Extract information
+        title = work.get("title", "Untitled")
+        publication_year = work.get("publication_year", "Unknown")
+        publication_date = work.get("publication_date", "Unknown")
+        work_type = work.get("type", "Unknown")
+        cited_by_count = work.get("cited_by_count", 0)
+        
+        # Extract authors
+        authorships = work.get("authorships", [])
+        authors_info = []
+        for i, authorship in enumerate(authorships):
+            author = authorship.get("author", {})
+            institutions = authorship.get("institutions", [])
+            inst_names = [inst.get("display_name", "") for inst in institutions]
+            
+            author_info = f"   {i+1}. {author.get('display_name', 'Unknown')}"
+            if inst_names:
+                author_info += f" ({', '.join(inst_names[:2])})"
+            authors_info.append(author_info)
+        
+        # Extract venue information
+        primary_location = work.get("primary_location", {})
+        source = primary_location.get("source", {})
+        venue_name = source.get("display_name", "Unknown venue")
+        
+        # Extract topics
+        primary_topic = work.get("primary_topic", {})
+        topics = work.get("topics", [])
+        
+        # Extract abstract
+        abstract_index = work.get("abstract_inverted_index", {})
+        abstract_text = "No abstract available"
+        if abstract_index:
+            # Reconstruct abstract from inverted index
+            word_positions = []
+            for word, positions in abstract_index.items():
+                for pos in positions:
+                    word_positions.append((pos, word))
+            word_positions.sort()
+            abstract_words = [word for _, word in word_positions]
+            abstract_text = " ".join(abstract_words)
+            if len(abstract_text) > 500:
+                abstract_text = abstract_text[:500] + "..."
+        
+        # Format response
+        result = f"Work Details: {title}\n"
+        result += f"OpenAlex ID: {work.get('id', '')}\n"
+        result += f"Publication Year: {publication_year}\n"
+        result += f"Publication Date: {publication_date}\n"
+        result += f"Type: {work_type}\n"
+        result += f"Citations: {cited_by_count:,}\n"
+        result += f"Venue: {venue_name}\n"
+        
+        if work.get("doi"):
+            result += f"DOI: {work.get('doi')}\n"
+        
+        result += f"Open Access: {work.get('open_access', {}).get('is_oa', False)}\n"
+        
+        if primary_topic.get("display_name"):
+            result += f"\nPrimary Topic: {primary_topic.get('display_name')}\n"
+        
+        if len(topics) > 1:
+            other_topics = [t.get("display_name", "") for t in topics[1:4]]
+            result += f"Other Topics: {', '.join(other_topics)}\n"
+        
+        result += f"\nAuthors ({len(authorships)} total):\n"
+        result += "\n".join(authors_info[:10])
+        if len(authorships) > 10:
+            result += f"\n   ... and {len(authorships) - 10} more authors"
+        
+        result += f"\n\nAbstract:\n{abstract_text}\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in get_work_details: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Search Topics",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_topics(
+    query: str,
+    level: int = None,
+    limit: int = 20
+) -> str:
+    """
+    Search and explore research topics with detailed information.
+    
+    Find research topics, fields, and areas of study with
+    comprehensive metadata and research volume statistics.
+    
+    Args:
+        query: Topic name or description to search for
+        level: Topic hierarchy level (0-5, where 0 is most general)
+        limit: Maximum number of topics to return (1-50, default: 20)
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 50),
+            "select": "id,display_name,description,level,works_count,cited_by_count,subfield,field,domain"
+        }
+        
+        if level is not None:
+            params["filter"] = f"level:{level}"
+        
+        response = await client.get("/topics", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        topics = data.get("results", [])
+        if not topics:
+            return f"No topics found for query: '{query}'"
+        
+        result = f"Found {len(topics)} topic(s) for '{query}':\n\n"
+        
+        for i, topic in enumerate(topics, 1):
+            # Calculate relevance score
+            display_name = topic.get("display_name", "").lower()
+            query_lower = query.lower()
+            
+            relevance = 0.0
+            if query_lower == display_name:
+                relevance = 1.0
+            elif query_lower in display_name:
+                relevance = 0.8
+            elif any(word in display_name for word in query_lower.split()):
+                relevance = 0.6
+            else:
+                relevance = 0.4
+            
+            # Extract hierarchy
+            domain = topic.get("domain", {}).get("display_name", "") if topic.get("domain") else ""
+            field = topic.get("field", {}).get("display_name", "") if topic.get("field") else ""
+            subfield = topic.get("subfield", {}).get("display_name", "") if topic.get("subfield") else ""
+            
+            result += f"{i}. {topic.get('display_name', 'Unknown')}\n"
+            result += f"   Level: {topic.get('level', 'Unknown')}\n"
+            result += f"   Relevance: {relevance:.2f}\n"
+            result += f"   Works: {topic.get('works_count', 0):,}\n"
+            result += f"   Citations: {topic.get('cited_by_count', 0):,}\n"
+            
+            if domain or field or subfield:
+                hierarchy = " > ".join(filter(None, [domain, field, subfield]))
+                result += f"   Hierarchy: {hierarchy}\n"
+            
+            if topic.get("description"):
+                desc = topic.get("description", "")
+                if len(desc) > 150:
+                    desc = desc[:150] + "..."
+                result += f"   Description: {desc}\n"
+            
+            result += f"   OpenAlex ID: {topic.get('id', '')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_topics: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Analyze Text Aboutness",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def analyze_text_aboutness(
+    title: str,
+    abstract: str = None
+) -> str:
+    """
+    Analyze text to determine research topics, keywords, and concepts.
+    
+    Uses OpenAlex's AI models to classify text and identify
+    relevant research areas, topics, and concepts.
+    
+    Args:
+        title: Title of the text to analyze (required)
+        abstract: Abstract or description text (optional, improves accuracy)
+    """
+    try:
+        client = await get_http_client()
+        
+        # Validate input length
+        total_text = title + (abstract or "")
+        if len(total_text) < 20:
+            return "Error: Text too short (minimum 20 characters)"
+        if len(total_text) > 2000:
+            return "Error: Text too long (maximum 2000 characters)"
+        
+        params = {"title": title}
+        if abstract:
+            params["abstract"] = abstract
+        
+        response = await client.get("/text", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract results
+        meta = data.get("meta", {})
+        keywords = data.get("keywords", [])
+        primary_topic = data.get("primary_topic", {})
+        topics = data.get("topics", [])
+        concepts = data.get("concepts", [])
+        
+        result = f"Text Analysis Results:\n"
+        result += f"Title: {title}\n"
+        if abstract:
+            result += f"Abstract: {abstract[:100]}{'...' if len(abstract) > 100 else ''}\n"
+        result += "\n"
+        
+        # Primary topic
+        if primary_topic:
+            result += f"Primary Topic: {primary_topic.get('display_name', 'Unknown')}\n"
+            result += f"  Confidence: {primary_topic.get('score', 0):.3f}\n"
+            result += f"  Level: {primary_topic.get('level', 'Unknown')}\n"
+            result += "\n"
+        
+        # Keywords
+        if keywords:
+            result += f"Keywords ({len(keywords)} found):\n"
+            for keyword in keywords[:5]:
+                result += f"  • {keyword.get('display_name', 'Unknown')} (score: {keyword.get('score', 0):.3f})\n"
+            result += "\n"
+        
+        # Additional topics
+        if len(topics) > 1:
+            result += f"Additional Topics:\n"
+            for topic in topics[1:4]:
+                result += f"  • {topic.get('display_name', 'Unknown')} (score: {topic.get('score', 0):.3f})\n"
+            result += "\n"
+        
+        # Concepts
+        if concepts:
+            result += f"Related Concepts:\n"
+            for concept in concepts[:5]:
+                result += f"  • {concept.get('display_name', 'Unknown')} (score: {concept.get('score', 0):.3f})\n"
+            result += "\n"
+        
+        # Summary statistics
+        result += f"Analysis Summary:\n"
+        result += f"  Keywords found: {meta.get('keywords_count', 0)}\n"
+        result += f"  Topics found: {meta.get('topics_count', 0)}\n"
+        result += f"  Concepts found: {meta.get('concepts_count', 0)}\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_text_aboutness: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Search Sources",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_sources(
+    query: str,
+    source_type: str = None,
+    subject_area: str = None,
+    limit: int = 20
+) -> str:
+    """
+    Search for publication sources (journals, conferences, repositories).
+    
+    Find journals, conferences, books, and other publication venues
+    with detailed metrics and information.
+    
+    Args:
+        query: Source name or description to search for
+        source_type: Filter by type ("journal", "conference", "repository", "book")
+        subject_area: Filter by subject area or field
+        limit: Maximum number of sources to return (1-50, default: 20)
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 50),
+            "select": "id,display_name,type,host_organization,works_count,cited_by_count,summary_stats,issn,homepage_url"
+        }
+        
+        # Add filters
+        filters = []
+        if source_type:
+            filters.append(f"type:{source_type}")
+        
+        if filters:
+            params["filter"] = ",".join(filters)
+        
+        response = await client.get("/sources", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        sources = data.get("results", [])
+        if not sources:
+            return f"No sources found for query: '{query}'"
+        
+        result = f"Found {len(sources)} source(s) for '{query}':\n\n"
+        
+        for i, source in enumerate(sources, 1):
+            # Extract metrics
+            works_count = source.get("works_count", 0)
+            cited_by_count = source.get("cited_by_count", 0)
+            summary_stats = source.get("summary_stats", {})
+            h_index = summary_stats.get("h_index", 0)
+            
+            # Extract host organization
+            host_org = source.get("host_organization", "")
+            
+            result += f"{i}. {source.get('display_name', 'Unknown')}\n"
+            result += f"   Type: {source.get('type', 'Unknown')}\n"
+            result += f"   Works: {works_count:,}\n"
+            result += f"   Citations: {cited_by_count:,}\n"
+            if h_index:
+                result += f"   H-index: {h_index}\n"
+            
+            if host_org:
+                result += f"   Host: {host_org}\n"
+            
+            issn = source.get("issn", [])
+            if issn:
+                result += f"   ISSN: {', '.join(issn)}\n"
+            
+            if source.get("homepage_url"):
+                result += f"   Homepage: {source.get('homepage_url')}\n"
+            
+            result += f"   OpenAlex ID: {source.get('id', '')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_sources: {e}")
+        return f"Error: {str(e)}"
+
 if __name__ == "__main__":
     # Run the server
     logger.info("OpenAlex Author Disambiguation MCP Server starting...")

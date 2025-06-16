@@ -68,9 +68,11 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 }
 ```
 
-## 🛠️ Available Tools
+## 🛠️ Available Tools (10 Professional Tools)
 
-### 1. **disambiguate_author**
+### 🔍 **Author Disambiguation & Search (5 Tools)**
+
+#### 1. **disambiguate_author**
 Disambiguate an author using OpenAlex's ML-powered system.
 
 **Parameters:**
@@ -80,12 +82,7 @@ Disambiguate an author using OpenAlex's ML-powered system.
 - `orcid` (optional): ORCID identifier for highest confidence
 - `max_candidates` (optional): Maximum candidates to return (1-25, default: 5)
 
-**Example:**
-```
-disambiguate_author(name="Fiona Watt", affiliation="EMBO", research_field="stem cell")
-```
-
-### 2. **search_authors**
+#### 2. **search_authors**
 Search for authors with advanced filtering.
 
 **Parameters:**
@@ -94,13 +91,13 @@ Search for authors with advanced filtering.
 - `research_field` (optional): Filter by research field
 - `limit` (optional): Maximum results (1-25, default: 10)
 
-### 3. **get_author_profile**
+#### 3. **get_author_profile**
 Get detailed author profile by OpenAlex ID.
 
 **Parameters:**
 - `openalex_id` (required): OpenAlex author ID
 
-### 4. **resolve_institution**
+#### 4. **resolve_institution**
 Resolve institution names and abbreviations.
 
 **Parameters:**
@@ -111,12 +108,56 @@ Resolve institution names and abbreviations.
 - `Stanford` → `Stanford University`
 - `Max Planck` → `Max Planck Society`
 
-### 5. **autocomplete_authors**
+#### 5. **autocomplete_authors**
 Fast autocomplete search for interactive applications.
 
 **Parameters:**
 - `query` (required): Partial author name
 - `limit` (optional): Maximum suggestions (1-25, default: 10)
+
+### 📚 **Research Intelligence & Discovery (5 New Tools)**
+
+#### 6. **search_works**
+Search for scholarly works (publications) with advanced filtering.
+
+**Parameters:**
+- `query` (required): Search query for title, abstract, or content
+- `author_name` (optional): Filter by author name
+- `publication_year` (optional): Filter by year (e.g., "2023" or "2020-2023")
+- `source_type` (optional): Filter by type ("journal-article", "book", "dataset", etc.)
+- `topic` (optional): Filter by research topic or field
+- `sort_by` (optional): Sort order ("relevance", "cited_by_count", "publication_date")
+- `limit` (optional): Maximum results (1-100, default: 20)
+
+#### 7. **get_work_details**
+Get comprehensive details about a specific scholarly work.
+
+**Parameters:**
+- `work_id` (required): OpenAlex work ID (e.g., 'W2741809807' or full URL)
+
+#### 8. **search_topics**
+Search and explore research topics with detailed information.
+
+**Parameters:**
+- `query` (required): Topic name or description to search for
+- `level` (optional): Topic hierarchy level (0-5, where 0 is most general)
+- `limit` (optional): Maximum topics to return (1-50, default: 20)
+
+#### 9. **analyze_text_aboutness**
+Analyze text to determine research topics, keywords, and concepts using AI.
+
+**Parameters:**
+- `title` (required): Title of the text to analyze
+- `abstract` (optional): Abstract or description text (improves accuracy)
+
+#### 10. **search_sources**
+Search for publication sources (journals, conferences, repositories).
+
+**Parameters:**
+- `query` (required): Source name or description to search for
+- `source_type` (optional): Filter by type ("journal", "conference", "repository", "book")
+- `subject_area` (optional): Filter by subject area or field
+- `limit` (optional): Maximum sources to return (1-50, default: 20)
 
 ## 📊 Example Usage
 
