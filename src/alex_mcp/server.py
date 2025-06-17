@@ -3,7 +3,7 @@
 OpenAlex Author Disambiguation MCP Server
 
 A professional MCP server for author disambiguation and institution resolution using OpenAlex.org API.
-Built following MCP best practices with the standard MCP library.
+Built following MCP best practices with the FastMCP library.
 
 Features:
 - ML-powered author disambiguation with confidence scoring
@@ -23,14 +23,14 @@ from dataclasses import dataclass
 import json
 
 import httpx
-from mcp.server import Server
+from fastmcp import FastMCP
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize MCP server
-server = Server("OpenAlex Academic Research")
+# Initialize FastMCP server
+mcp = FastMCP("OpenAlex Academic Research")
 
 # Constants
 OPENALEX_BASE_URL = "https://api.openalex.org"
@@ -207,7 +207,7 @@ async def create_author_profile(author_data: Dict[str, Any], query_name: str,
 # MCP TOOL IMPLEMENTATIONS
 # ============================================================================
 
-@server.tool(
+@mcp.tool(
     annotations={
         "title": "Disambiguate Author",
         "readOnlyHint": True,
@@ -291,7 +291,7 @@ async def disambiguate_author(
         logger.error(f"Error in disambiguate_author: {e}")
         return f"Error: {str(e)}"
 
-@server.tool(
+@mcp.tool(
     annotations={
         "title": "Search Authors",
         "readOnlyHint": True,
@@ -355,7 +355,7 @@ async def search_authors(
         logger.error(f"Error in search_authors: {e}")
         return f"Error: {str(e)}"
 
-@server.tool(
+@mcp.tool(
     annotations={
         "title": "Get Author Profile",
         "readOnlyHint": True,
@@ -422,7 +422,7 @@ async def get_author_profile(openalex_id: str) -> str:
         logger.error(f"Error in get_author_profile: {e}")
         return f"Error: {str(e)}"
 
-@server.tool(
+@mcp.tool(
     annotations={
         "title": "Resolve Institution",
         "readOnlyHint": True,
@@ -504,13 +504,13 @@ async def resolve_institution(institution_query: str) -> str:
         logger.error(f"Error in resolve_institution: {e}")
         return f"Error: {str(e)}"
 
-# MCP server is configured with tool decorators
+# FastMCP automatically handles tool registration and calling
 
 def main():
     """Entry point for the alex-mcp command."""
     import sys
     logger.info("OpenAlex Author Disambiguation MCP Server starting...")
-    asyncio.run(server.run(sys.stdin.buffer, sys.stdout.buffer, {}))
+    asyncio.run(mcp.run())
 
 if __name__ == "__main__":
     main()
