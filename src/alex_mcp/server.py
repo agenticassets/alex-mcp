@@ -579,7 +579,7 @@ async def search_works(
         params = {
             "search": query,
             "per-page": min(limit, 100),
-            "select": "id,title,publication_year,type,open_access,authorships,host_venue,cited_by_count,abstract_inverted_index"
+            "select": "id,title,publication_year,type,open_access,authorships,primary_location,cited_by_count,abstract_inverted_index"
         }
         
         # Add filters
@@ -632,7 +632,7 @@ async def search_works(
                 authors.append("et al.")
             
             # Extract venue
-            venue = work.get("host_venue", {}).get("display_name", "Unknown venue")
+            venue = work.get("primary_location", {}).get("source", {}).get("display_name", "Unknown venue")
             
             # Extract abstract
             abstract = ""
@@ -705,7 +705,7 @@ async def get_work_details(work_id: str) -> str:
             authors.append(author_info)
         
         # Extract venue
-        venue = work.get("host_venue", {})
+        venue = work.get("primary_location", {}).get("source", {})
         venue_name = venue.get("display_name", "Unknown venue")
         venue_type = venue.get("type", "Unknown")
         venue_id = venue.get("id", "")
