@@ -510,6 +510,7 @@ def main():
     """Entry point for the alex-mcp command."""
     import sys
     logger.info("OpenAlex Author Disambiguation MCP Server starting...")
+    # When installed as a package, the src directory is not in the path
     asyncio.run(mcp.run())
 
 if __name__ == "__main__":
