@@ -7,12 +7,13 @@ setup(
     packages=find_packages(where="src"),
     entry_points={
         "console_scripts": [
-            "alex-mcp=alex_mcp.server:main",
+            "alex-mcp=src.alex_mcp.server:main",
         ],
     },
     install_requires=[
-        "mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git",
+        "fastmcp>=0.1.0",
         "httpx>=0.25.0",
+        "pydantic>=2.0.0",
         "rich>=13.0.0",
     ],
 )

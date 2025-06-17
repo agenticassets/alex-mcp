@@ -23,22 +23,14 @@ from dataclasses import dataclass
 import json
 
 import httpx
-from mcp.server import Server
-from mcp.types import (
-    Tool,
-    TextContent,
-    CallToolRequest,
-    CallToolResult,
-    ListToolsRequest,
-    ListToolsResult,
-)
+from fastmcp import FastMCP
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize MCP server
-server = Server("openalex-author-disambiguation")
+# Initialize FastMCP server
+mcp = FastMCP("OpenAlex Academic Research")
 
 # Constants
 OPENALEX_BASE_URL = "https://api.openalex.org"
@@ -215,7 +207,14 @@ async def create_author_profile(author_data: Dict[str, Any], query_name: str,
 # MCP TOOL IMPLEMENTATIONS
 # ============================================================================
 
-async def disambiguate_author_impl(
+@mcp.tool(
+    annotations={
+        "title": "Disambiguate Author",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def disambiguate_author(
     name: str,
     affiliation: str = None,
     research_field: str = None,
@@ -292,7 +291,14 @@ async def disambiguate_author_impl(
         logger.error(f"Error in disambiguate_author: {e}")
         return f"Error: {str(e)}"
 
-async def search_authors_impl(
+@mcp.tool(
+    annotations={
+        "title": "Search Authors",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_authors(
     name: str,
     affiliation: str = None,
     research_field: str = None,
@@ -349,7 +355,14 @@ async def search_authors_impl(
         logger.error(f"Error in search_authors: {e}")
         return f"Error: {str(e)}"
 
-async def get_author_profile_impl(openalex_id: str) -> str:
+@mcp.tool(
+    annotations={
+        "title": "Get Author Profile",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def get_author_profile(openalex_id: str) -> str:
     """
     Get detailed author profile by OpenAlex ID.
     """
@@ -409,7 +422,14 @@ async def get_author_profile_impl(openalex_id: str) -> str:
         logger.error(f"Error in get_author_profile: {e}")
         return f"Error: {str(e)}"
 
-async def resolve_institution_impl(institution_query: str) -> str:
+@mcp.tool(
+    annotations={
+        "title": "Resolve Institution",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def resolve_institution(institution_query: str) -> str:
     """
     Resolve institution name or abbreviation to full OpenAlex data.
     """
@@ -484,150 +504,13 @@ async def resolve_institution_impl(institution_query: str) -> str:
         logger.error(f"Error in resolve_institution: {e}")
         return f"Error: {str(e)}"
 
-# ============================================================================
-# MCP SERVER HANDLERS
-# ============================================================================
-
-@server.list_tools()
-async def list_tools() -> list[Tool]:
-    """List available tools."""
-    return [
-        Tool(
-            name="disambiguate_author",
-            description="Disambiguate an author using OpenAlex's ML-powered disambiguation system. Returns ranked candidates with confidence scores and detailed analysis.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Author name (required) - can be full name or surname"
-                    },
-                    "affiliation": {
-                        "type": "string",
-                        "description": "Institution name or affiliation to improve accuracy"
-                    },
-                    "research_field": {
-                        "type": "string",
-                        "description": "Research field, topic, or area of study"
-                    },
-                    "orcid": {
-                        "type": "string",
-                        "description": "ORCID identifier if known (provides highest confidence)"
-                    },
-                    "max_candidates": {
-                        "type": "integer",
-                        "description": "Maximum number of candidates to return (1-25, default: 5)",
-                        "default": 5
-                    }
-                },
-                "required": ["name"]
-            }
-        ),
-        Tool(
-            name="search_authors",
-            description="Search for authors with advanced filtering capabilities. Useful for finding multiple authors or exploring author profiles in specific institutions or research areas.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Author name to search for"
-                    },
-                    "affiliation": {
-                        "type": "string",
-                        "description": "Filter by institution or affiliation"
-                    },
-                    "research_field": {
-                        "type": "string",
-                        "description": "Filter by research field or topic"
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Maximum number of results (1-25, default: 10)",
-                        "default": 10
-                    }
-                },
-                "required": ["name"]
-            }
-        ),
-        Tool(
-            name="get_author_profile",
-            description="Get detailed author profile by OpenAlex ID. Retrieves comprehensive information about a specific author including metrics, affiliations, and research areas.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "openalex_id": {
-                        "type": "string",
-                        "description": "OpenAlex author ID (e.g., 'A5023888391' or full URL)"
-                    }
-                },
-                "required": ["openalex_id"]
-            }
-        ),
-        Tool(
-            name="resolve_institution",
-            description="Resolve institution name or abbreviation to full OpenAlex data. Automatically expands abbreviations and resolves partial names.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "institution_query": {
-                        "type": "string",
-                        "description": "Institution name, abbreviation, or partial name"
-                    }
-                },
-                "required": ["institution_query"]
-            }
-        )
-    ]
-
-@server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Handle tool calls."""
-    try:
-        if name == "disambiguate_author":
-            result = await disambiguate_author_impl(
-                name=arguments["name"],
-                affiliation=arguments.get("affiliation"),
-                research_field=arguments.get("research_field"),
-                orcid=arguments.get("orcid"),
-                max_candidates=arguments.get("max_candidates", 5)
-            )
-        elif name == "search_authors":
-            result = await search_authors_impl(
-                name=arguments["name"],
-                affiliation=arguments.get("affiliation"),
-                research_field=arguments.get("research_field"),
-                limit=arguments.get("limit", 10)
-            )
-        elif name == "get_author_profile":
-            result = await get_author_profile_impl(
-                openalex_id=arguments["openalex_id"]
-            )
-        elif name == "resolve_institution":
-            result = await resolve_institution_impl(
-                institution_query=arguments["institution_query"]
-            )
-        else:
-            raise ValueError(f"Unknown tool: {name}")
-        
-        return [TextContent(type="text", text=result)]
-    
-    except Exception as e:
-        logger.error(f"Error calling tool {name}: {e}")
-        return [TextContent(type="text", text=f"Error: {str(e)}")]
+# FastMCP automatically handles tool registration and calling
 
 def main():
     """Entry point for the alex-mcp command."""
     import sys
-    import uvicorn
     logger.info("OpenAlex Author Disambiguation MCP Server starting...")
-    # When run directly, start a simple HTTP server
-    uvicorn.run(
-        "src.alex_mcp.server:server",
-        host="127.0.0.1",
-        port=8000,
-        log_level="info"
-    )
+    asyncio.run(mcp.run())
 
 if __name__ == "__main__":
     main()
