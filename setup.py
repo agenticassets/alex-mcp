@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="alex-mcp",
-    version="3.0.3",
+    version="3.1.0",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     entry_points={

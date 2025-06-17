@@ -504,6 +504,514 @@ async def resolve_institution(institution_query: str) -> str:
         logger.error(f"Error in resolve_institution: {e}")
         return f"Error: {str(e)}"
 
+# ============================================================================
+# ADDITIONAL MCP TOOL IMPLEMENTATIONS
+# ============================================================================
+
+@mcp.tool(
+    annotations={
+        "title": "Author Autocomplete",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def author_autocomplete(
+    query: str,
+    limit: int = 10
+) -> str:
+    """
+    Get autocomplete suggestions for author names.
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "q": query,
+            "filter": "entity:author",
+            "per-page": min(limit, 25)
+        }
+        
+        response = await client.get("/autocomplete", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get("results", [])
+        if not results:
+            return f"No author suggestions found for '{query}'"
+        
+        result = f"Author suggestions for '{query}':\n\n"
+        
+        for i, suggestion in enumerate(results, 1):
+            result += f"{i}. {suggestion.get('display_name', 'Unknown')}\n"
+            result += f"   ID: {suggestion.get('id', '')}\n"
+            if suggestion.get("hint"):
+                result += f"   Hint: {suggestion.get('hint')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in author_autocomplete: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Search Works",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_works(
+    query: str,
+    author_name: Optional[str] = None,
+    publication_year: Optional[str] = None,
+    source_type: Optional[str] = None,
+    topic: Optional[str] = None,
+    sort_by: str = "relevance",
+    limit: int = 20
+) -> str:
+    """
+    Search for scholarly works (publications) with advanced filtering.
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 100),
+            "select": "id,title,publication_year,type,open_access,authorships,host_venue,cited_by_count,abstract_inverted_index"
+        }
+        
+        # Add filters
+        filters = []
+        
+        if author_name:
+            filters.append(f'author.display_name.search:"{author_name}"')
+        
+        if publication_year:
+            # Handle range like "2020-2023" or single year like "2023"
+            if "-" in publication_year:
+                start_year, end_year = publication_year.split("-")
+                filters.append(f'publication_year:>={start_year},<={end_year}')
+            else:
+                filters.append(f'publication_year:{publication_year}')
+        
+        if source_type:
+            filters.append(f'type:{source_type}')
+        
+        if topic:
+            filters.append(f'concepts.display_name.search:"{topic}"')
+        
+        if filters:
+            params["filter"] = ",".join(filters)
+        
+        # Add sorting
+        if sort_by == "cited_by_count":
+            params["sort"] = "cited_by_count:desc"
+        elif sort_by == "publication_date":
+            params["sort"] = "publication_date:desc"
+        
+        response = await client.get("/works", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get("results", [])
+        if not results:
+            return f"No works found for '{query}'"
+        
+        result = f"Found {data.get('meta', {}).get('count', len(results))} works for '{query}':\n\n"
+        
+        for i, work in enumerate(results, 1):
+            # Extract authors
+            authors = []
+            for authorship in work.get("authorships", [])[:3]:
+                author_name = authorship.get("author", {}).get("display_name", "Unknown")
+                authors.append(author_name)
+            
+            if len(work.get("authorships", [])) > 3:
+                authors.append("et al.")
+            
+            # Extract venue
+            venue = work.get("host_venue", {}).get("display_name", "Unknown venue")
+            
+            # Extract abstract
+            abstract = ""
+            if work.get("abstract_inverted_index"):
+                abstract_words = []
+                for position, word in sorted(work.get("abstract_inverted_index").items()):
+                    abstract_words.append(word)
+                abstract = " ".join(abstract_words)
+                if len(abstract) > 200:
+                    abstract = abstract[:197] + "..."
+            
+            result += f"{i}. {work.get('title', 'Untitled')}\n"
+            result += f"   Authors: {', '.join(authors)}\n"
+            result += f"   Published: {work.get('publication_year', 'Unknown')} in {venue}\n"
+            result += f"   Type: {work.get('type', 'Unknown')}\n"
+            result += f"   Citations: {work.get('cited_by_count', 0)}\n"
+            result += f"   Open Access: {work.get('open_access', {}).get('is_oa', False)}\n"
+            result += f"   OpenAlex ID: {work.get('id', '')}\n"
+            if abstract:
+                result += f"   Abstract: {abstract}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_works: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Get Work Details",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def get_work_details(work_id: str) -> str:
+    """
+    Get comprehensive details about a specific scholarly work.
+    """
+    try:
+        client = await get_http_client()
+        
+        # Clean ID
+        clean_id = work_id.replace("https://openalex.org/", "")
+        if not clean_id.startswith("W"):
+            clean_id = f"W{clean_id}"
+        
+        response = await client.get(f"/works/{clean_id}")
+        response.raise_for_status()
+        work = response.json()
+        
+        # Extract basic information
+        title = work.get("title", "Untitled")
+        publication_year = work.get("publication_year", "Unknown")
+        type_name = work.get("type", "Unknown")
+        cited_by_count = work.get("cited_by_count", 0)
+        
+        # Extract authors
+        authors = []
+        for authorship in work.get("authorships", []):
+            author_name = authorship.get("author", {}).get("display_name", "Unknown")
+            author_id = authorship.get("author", {}).get("id", "")
+            institutions = []
+            for institution in authorship.get("institutions", []):
+                institutions.append(institution.get("display_name", "Unknown"))
+            
+            author_info = f"{author_name} ({author_id})"
+            if institutions:
+                author_info += f" - {', '.join(institutions)}"
+            authors.append(author_info)
+        
+        # Extract venue
+        venue = work.get("host_venue", {})
+        venue_name = venue.get("display_name", "Unknown venue")
+        venue_type = venue.get("type", "Unknown")
+        venue_id = venue.get("id", "")
+        
+        # Extract abstract
+        abstract = ""
+        if work.get("abstract_inverted_index"):
+            abstract_words = []
+            for position, word in sorted(work.get("abstract_inverted_index").items()):
+                abstract_words.append(word)
+            abstract = " ".join(abstract_words)
+        
+        # Extract concepts/topics
+        concepts = []
+        for concept in work.get("concepts", [])[:5]:
+            concept_name = concept.get("display_name", "Unknown")
+            concept_score = concept.get("score", 0)
+            concepts.append(f"{concept_name} (score: {concept_score:.2f})")
+        
+        # Extract open access information
+        oa_status = work.get("open_access", {}).get("oa_status", "Unknown")
+        is_oa = work.get("open_access", {}).get("is_oa", False)
+        
+        # Format response
+        result = f"Work Details: {title}\n\n"
+        result += f"Basic Information:\n"
+        result += f"  OpenAlex ID: {work.get('id', '')}\n"
+        result += f"  DOI: {work.get('doi', 'None')}\n"
+        result += f"  Type: {type_name}\n"
+        result += f"  Published: {publication_year}\n"
+        result += f"  Citations: {cited_by_count}\n"
+        result += f"  Open Access: {is_oa} (Status: {oa_status})\n"
+        
+        result += f"\nAuthors:\n"
+        for i, author in enumerate(authors, 1):
+            result += f"  {i}. {author}\n"
+        
+        result += f"\nVenue:\n"
+        result += f"  Name: {venue_name}\n"
+        result += f"  Type: {venue_type}\n"
+        result += f"  ID: {venue_id}\n"
+        
+        if concepts:
+            result += f"\nConcepts/Topics:\n"
+            for concept in concepts:
+                result += f"  • {concept}\n"
+        
+        if abstract:
+            result += f"\nAbstract:\n{abstract}\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in get_work_details: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Search Topics",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_topics(
+    query: str,
+    level: Optional[int] = None,
+    limit: int = 20
+) -> str:
+    """
+    Search and explore research topics with detailed information.
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 50),
+            "select": "id,display_name,description,level,works_count,cited_by_count,related_concepts"
+        }
+        
+        # Add filters
+        filters = []
+        if level is not None:
+            filters.append(f'level:{level}')
+        
+        if filters:
+            params["filter"] = ",".join(filters)
+        
+        response = await client.get("/concepts", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get("results", [])
+        if not results:
+            return f"No topics found for '{query}'"
+        
+        result = f"Found {data.get('meta', {}).get('count', len(results))} topics for '{query}':\n\n"
+        
+        for i, topic in enumerate(results, 1):
+            # Extract related concepts
+            related = []
+            for related_concept in topic.get("related_concepts", [])[:3]:
+                related.append(related_concept.get("display_name", "Unknown"))
+            
+            description = topic.get("description", "No description available")
+            if len(description) > 200:
+                description = description[:197] + "..."
+            
+            result += f"{i}. {topic.get('display_name', 'Unknown')}\n"
+            result += f"   Level: {topic.get('level', 'Unknown')} (0=general, 5=specific)\n"
+            result += f"   Works: {topic.get('works_count', 0):,}, Citations: {topic.get('cited_by_count', 0):,}\n"
+            result += f"   Description: {description}\n"
+            if related:
+                result += f"   Related topics: {', '.join(related)}\n"
+            result += f"   OpenAlex ID: {topic.get('id', '')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_topics: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Analyze Topics",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def analyze_topics(
+    title: str,
+    abstract: Optional[str] = None
+) -> str:
+    """
+    Analyze text to determine research topics, keywords, and concepts using OpenAlex.
+    """
+    try:
+        client = await get_http_client()
+        
+        # First, search for works with similar title to get concepts
+        params = {
+            "search": title,
+            "per-page": 5,
+            "select": "id,title,concepts"
+        }
+        
+        response = await client.get("/works", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get("results", [])
+        if not results:
+            return f"No similar works found to analyze topics for '{title}'"
+        
+        # Collect concepts from all similar works
+        all_concepts = {}
+        for work in results:
+            for concept in work.get("concepts", []):
+                concept_id = concept.get("id")
+                if concept_id in all_concepts:
+                    all_concepts[concept_id]["score"] += concept.get("score", 0)
+                    all_concepts[concept_id]["count"] += 1
+                else:
+                    all_concepts[concept_id] = {
+                        "id": concept_id,
+                        "display_name": concept.get("display_name", "Unknown"),
+                        "level": concept.get("level", 0),
+                        "score": concept.get("score", 0),
+                        "count": 1
+                    }
+        
+        # Calculate average scores and sort by score
+        for concept_id, concept in all_concepts.items():
+            concept["avg_score"] = concept["score"] / concept["count"]
+        
+        sorted_concepts = sorted(
+            all_concepts.values(), 
+            key=lambda x: x["avg_score"], 
+            reverse=True
+        )
+        
+        # Format response
+        result = f"Topic Analysis for: '{title}'\n\n"
+        
+        if abstract:
+            result += f"Abstract: {abstract[:100]}...\n\n"
+        
+        result += f"Identified Topics (from {len(results)} similar works):\n\n"
+        
+        # Group by level
+        by_level = {}
+        for concept in sorted_concepts[:20]:  # Top 20 concepts
+            level = concept["level"]
+            if level not in by_level:
+                by_level[level] = []
+            by_level[level].append(concept)
+        
+        # Display by level
+        for level in sorted(by_level.keys()):
+            level_name = {
+                0: "General Areas",
+                1: "Disciplines",
+                2: "Domains",
+                3: "Fields",
+                4: "Subfields",
+                5: "Specific Topics"
+            }.get(level, f"Level {level}")
+            
+            result += f"{level_name}:\n"
+            for concept in by_level[level]:
+                result += f"  • {concept['display_name']} (confidence: {concept['avg_score']:.2f})\n"
+            result += "\n"
+        
+        # Add recommendations
+        result += "Recommendations:\n"
+        result += "  • Consider using these topics as keywords in your manuscript\n"
+        result += "  • Explore the top topics to find related literature\n"
+        result += "  • Use specific topics (levels 4-5) for targeted literature searches\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in analyze_topics: {e}")
+        return f"Error: {str(e)}"
+
+@mcp.tool(
+    annotations={
+        "title": "Search Sources",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_sources(
+    query: str,
+    source_type: Optional[str] = None,
+    subject_area: Optional[str] = None,
+    limit: int = 20
+) -> str:
+    """
+    Search for publication sources (journals, conferences, repositories).
+    """
+    try:
+        client = await get_http_client()
+        
+        params = {
+            "search": query,
+            "per-page": min(limit, 50),
+            "select": "id,display_name,type,publisher,country_code,is_oa,is_in_doaj,homepage_url,works_count,cited_by_count,summary_stats"
+        }
+        
+        # Add filters
+        filters = []
+        if source_type:
+            filters.append(f'type:{source_type}')
+        
+        if subject_area:
+            filters.append(f'x_concepts.display_name.search:"{subject_area}"')
+        
+        if filters:
+            params["filter"] = ",".join(filters)
+        
+        response = await client.get("/sources", params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        results = data.get("results", [])
+        if not results:
+            return f"No sources found for '{query}'"
+        
+        result = f"Found {data.get('meta', {}).get('count', len(results))} sources for '{query}':\n\n"
+        
+        for i, source in enumerate(results, 1):
+            # Extract metrics
+            works_count = source.get("works_count", 0)
+            cited_by_count = source.get("cited_by_count", 0)
+            
+            # Extract impact metrics
+            summary_stats = source.get("summary_stats", {})
+            h_index = summary_stats.get("h_index")
+            i10_index = summary_stats.get("i10_index")
+            
+            # Extract publisher
+            publisher = source.get("publisher", {}).get("display_name", "Unknown")
+            
+            result += f"{i}. {source.get('display_name', 'Unknown')}\n"
+            result += f"   Type: {source.get('type', 'Unknown')}\n"
+            result += f"   Publisher: {publisher}\n"
+            if source.get("country_code"):
+                result += f"   Country: {source.get('country_code')}\n"
+            result += f"   Open Access: {source.get('is_oa', False)}\n"
+            result += f"   In DOAJ: {source.get('is_in_doaj', False)}\n"
+            result += f"   Works: {works_count:,}, Citations: {cited_by_count:,}\n"
+            if h_index:
+                result += f"   H-index: {h_index}\n"
+            if source.get("homepage_url"):
+                result += f"   Homepage: {source.get('homepage_url')}\n"
+            result += f"   OpenAlex ID: {source.get('id', '')}\n"
+            result += "\n"
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in search_sources: {e}")
+        return f"Error: {str(e)}"
+
 # FastMCP automatically handles tool registration and calling
 
 def main():
