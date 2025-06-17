@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alex-mcp"
-version = "3.3.0"
+version = "3.0.3"
 description = "MCP server for OpenAlex academic research API"
 authors = [{name = "Jorge Abreu Vicente", email = "jorge.abreu@embo.org"}]
 license = {text = "MIT"}
