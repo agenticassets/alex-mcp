@@ -216,9 +216,9 @@ async def create_author_profile(author_data: Dict[str, Any], query_name: str,
 )
 async def disambiguate_author(
     name: str,
-    affiliation: str = None,
-    research_field: str = None,
-    orcid: str = None,
+    affiliation: Optional[str] = None,
+    research_field: Optional[str] = None,
+    orcid: Optional[str] = None,
     max_candidates: int = 5
 ) -> str:
     """
@@ -300,8 +300,8 @@ async def disambiguate_author(
 )
 async def search_authors(
     name: str,
-    affiliation: str = None,
-    research_field: str = None,
+    affiliation: Optional[str] = None,
+    research_field: Optional[str] = None,
     limit: int = 10
 ) -> str:
     """
