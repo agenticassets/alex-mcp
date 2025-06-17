@@ -52,7 +52,7 @@ class AuthorProfile:
     research_topics: List[str] = None
     confidence_score: float = 0.0
     match_reasons: List[str] = None
-    career_stage: str = "Unknown"
+    career_stage: Optional[str] = "Unknown"
     
     def __post_init__(self):
         if self.institutions is None:
@@ -219,7 +219,7 @@ async def disambiguate_author(
     affiliation: Optional[str] = None,
     research_field: Optional[str] = None,
     orcid: Optional[str] = None,
-    max_candidates: int = 5
+    max_candidates: Optional[int] = 20
 ) -> str:
     """
     Disambiguate an author using OpenAlex's ML-powered disambiguation system.
@@ -302,7 +302,7 @@ async def search_authors(
     name: str,
     affiliation: Optional[str] = None,
     research_field: Optional[str] = None,
-    limit: int = 10
+    limit: Optional[int] = 20
 ) -> str:
     """
     Search for authors with advanced filtering capabilities.
@@ -362,7 +362,7 @@ async def search_authors(
         "openWorldHint": True
     }
 )
-async def get_author_profile(openalex_id: str, max_works: int = 10) -> str:
+async def get_author_profile(openalex_id: str, max_works: int = 50) -> str:
     """
     Get detailed author profile by OpenAlex ID, including recent articles.
     """
@@ -676,7 +676,7 @@ async def resolve_institution(institution_query: str) -> str:
 )
 async def author_autocomplete(
     query: str,
-    limit: int = 10
+    limit: Optional[int] = 10
 ) -> str:
     """
     Get autocomplete suggestions for author names.
@@ -721,25 +721,35 @@ async def author_autocomplete(
     }
 )
 async def search_works(
-    query: str,
+    query: Optional[str] = None,
     author_name: Optional[str] = None,
     publication_year: Optional[str] = None,
+    from_year: Optional[str] = None,
+    to_year: Optional[str] = None,
     source_type: Optional[str] = None,
     topic: Optional[str] = None,
-    sort_by: str = "relevance",
-    limit: int = 20
+    sort_by: Optional[str] = "relevance",
+    limit: Optional[int] = 20
 ) -> str:
     """
     Search for scholarly works (publications) with advanced filtering.
+    
+    All parameters are optional, but at least one search criterion should be provided.
+    For date ranges, you can either use publication_year with a range format (e.g., "2020-2023")
+    or use the from_year and to_year parameters separately.
     """
     try:
         client = await get_http_client()
         
+        # Initialize parameters
         params = {
-            "search": query,
-            "per-page": min(limit, 100),
+            "per-page": min(limit or 20, 100),
             "select": "id,title,publication_year,type,open_access,authorships,primary_location,cited_by_count,abstract_inverted_index"
         }
+        
+        # Add search query if provided
+        if query:
+            params["search"] = query
         
         # Add filters
         filters = []
@@ -747,6 +757,7 @@ async def search_works(
         if author_name:
             filters.append(f'author.display_name.search:"{author_name}"')
         
+        # Handle publication year filtering with multiple options
         if publication_year:
             # Handle range like "2020-2023" or single year like "2023"
             if "-" in publication_year:
@@ -754,6 +765,14 @@ async def search_works(
                 filters.append(f'publication_year:>={start_year},<={end_year}')
             else:
                 filters.append(f'publication_year:{publication_year}')
+        else:
+            # Handle from_year and to_year if provided
+            if from_year and to_year:
+                filters.append(f'publication_year:>={from_year},<={to_year}')
+            elif from_year:
+                filters.append(f'publication_year:>={from_year}')
+            elif to_year:
+                filters.append(f'publication_year:<={to_year}')
         
         if source_type:
             filters.append(f'type:{source_type}')
@@ -765,10 +784,11 @@ async def search_works(
             params["filter"] = ",".join(filters)
         
         # Add sorting
-        if sort_by == "cited_by_count":
-            params["sort"] = "cited_by_count:desc"
-        elif sort_by == "publication_date":
-            params["sort"] = "publication_date:desc"
+        if sort_by:
+            if sort_by == "cited_by_count":
+                params["sort"] = "cited_by_count:desc"
+            elif sort_by == "publication_date":
+                params["sort"] = "publication_date:desc"
         
         response = await client.get("/works", params=params)
         response.raise_for_status()
@@ -929,9 +949,9 @@ async def get_work_details(work_id: str) -> str:
     }
 )
 async def search_topics(
-    query: str,
+    query: Optional[str] = None,
     level: Optional[int] = None,
-    limit: int = 20
+    limit: Optional[int] = 20
 ) -> str:
     """
     Search and explore research topics with detailed information.
@@ -996,7 +1016,7 @@ async def search_topics(
     }
 )
 async def analyze_topics(
-    title: str,
+    title: Optional[str] = None,
     abstract: Optional[str] = None
 ) -> str:
     """
@@ -1099,10 +1119,10 @@ async def analyze_topics(
     }
 )
 async def search_sources(
-    query: str,
+    query: Optional[str] = None,
     source_type: Optional[str] = None,
     subject_area: Optional[str] = None,
-    limit: int = 20
+    limit: Optional[int] = 20
 ) -> str:
     """
     Search for publication sources (journals, conferences, repositories).
