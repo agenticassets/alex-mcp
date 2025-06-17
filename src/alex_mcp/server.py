@@ -739,6 +739,10 @@ async def search_works(
     or use the from_year and to_year parameters separately.
     """
     try:
+        # Check if at least one search criterion is provided
+        if not any([query, author_name, publication_year, from_year, to_year, source_type, topic]):
+            return "Error: At least one search criterion must be provided (query, author_name, publication_year, from_year, to_year, source_type, or topic)."
+        
         client = await get_http_client()
         
         # Initialize parameters
@@ -957,6 +961,10 @@ async def search_topics(
     Search and explore research topics with detailed information.
     """
     try:
+        # Check if at least query is provided
+        if not query:
+            return "Error: A search query must be provided."
+            
         client = await get_http_client()
         
         params = {
@@ -1023,6 +1031,10 @@ async def analyze_topics(
     Analyze text to determine research topics, keywords, and concepts using OpenAlex.
     """
     try:
+        # Check if at least title is provided
+        if not title:
+            return "Error: A title must be provided for topic analysis."
+            
         client = await get_http_client()
         
         # First, search for works with similar title to get concepts
@@ -1128,6 +1140,10 @@ async def search_sources(
     Search for publication sources (journals, conferences, repositories).
     """
     try:
+        # Check if at least one search criterion is provided
+        if not any([query, source_type, subject_area]):
+            return "Error: At least one search criterion must be provided (query, source_type, or subject_area)."
+            
         client = await get_http_client()
         
         params = {
