@@ -362,9 +362,9 @@ async def search_authors(
         "openWorldHint": True
     }
 )
-async def get_author_profile(openalex_id: str) -> str:
+async def get_author_profile(openalex_id: str, max_works: int = 10) -> str:
     """
-    Get detailed author profile by OpenAlex ID.
+    Get detailed author profile by OpenAlex ID, including recent articles.
     """
     try:
         client = await get_http_client()
@@ -374,11 +374,12 @@ async def get_author_profile(openalex_id: str) -> str:
         if not clean_id.startswith("A"):
             clean_id = f"A{clean_id}"
         
+        # Get author profile
         response = await client.get(f"/authors/{clean_id}")
         response.raise_for_status()
         author = response.json()
         
-        # Extract information
+        # Extract basic information
         name = author.get("display_name", "Unknown")
         orcid = author.get("orcid")
         institutions = [inst.get("display_name", "") for inst in author.get("last_known_institutions", [])]
@@ -391,6 +392,19 @@ async def get_author_profile(openalex_id: str) -> str:
         
         topics = [concept.get("display_name", "") for concept in author.get("x_concepts", [])[:5]]
         career_stage = determine_career_stage(author)
+        
+        # Get author's works (articles)
+        works_params = {
+            "filter": f"author.id:{clean_id},type:article",
+            "sort": "publication_date:desc",
+            "per-page": max_works,
+            "select": "id,title,publication_year,publication_date,type,authorships,primary_location,cited_by_count,abstract_inverted_index,is_retracted,is_paratext,has_fulltext,concepts,indexed_in,topics,corresponding_author_ids,corresponding_institution_ids,keywords,ids"
+        }
+        
+        works_response = await client.get("/works", params=works_params)
+        works_response.raise_for_status()
+        works_data = works_response.json()
+        articles = works_data.get("results", [])
         
         # Format response
         result = f"Author Profile: {name}\n"
@@ -415,6 +429,151 @@ async def get_author_profile(openalex_id: str) -> str:
             result += f"\nResearch Topics:\n"
             for topic in topics:
                 result += f"  • {topic}\n"
+        
+        # Add recent articles
+        if articles:
+            result += f"\nRecent Articles ({len(articles)}):\n"
+            for i, article in enumerate(articles, 1):
+                # Extract basic article info
+                title = article.get("title", "Untitled")
+                year = article.get("publication_year", "Unknown")
+                pub_date = article.get("publication_date", "Unknown date")
+                citations = article.get("cited_by_count", 0)
+                is_retracted = article.get("is_retracted", False)
+                is_paratext = article.get("is_paratext", False)
+                has_fulltext = article.get("has_fulltext", False)
+                
+                # Extract venue
+                venue = article.get("primary_location", {}).get("source", {}).get("display_name", "Unknown venue")
+                
+                # Extract indexing information
+                indexed_in = article.get("indexed_in", [])
+                indexed_str = ", ".join(indexed_in) if indexed_in else "None"
+                
+                # Extract IDs
+                ids = article.get("ids", {})
+                id_strings = []
+                if ids.get("doi"):
+                    id_strings.append(f"DOI: {ids.get('doi')}")
+                if ids.get("pmid"):
+                    id_strings.append(f"PMID: {ids.get('pmid')}")
+                if ids.get("pmcid"):
+                    id_strings.append(f"PMCID: {ids.get('pmcid')}")
+                if ids.get("mag"):
+                    id_strings.append(f"MAG: {ids.get('mag')}")
+                
+                # Extract keywords
+                keywords = article.get("keywords", [])
+                keyword_list = []
+                for keyword_obj in keywords:
+                    if isinstance(keyword_obj, dict):
+                        keyword_list.append(keyword_obj.get("keyword", ""))
+                    else:
+                        keyword_list.append(str(keyword_obj))
+                
+                # Extract abstract
+                abstract = ""
+                if article.get("abstract_inverted_index"):
+                    abstract_words = []
+                    for position, word in sorted(article.get("abstract_inverted_index").items()):
+                        abstract_words.append(word)
+                    abstract = " ".join(abstract_words)
+                    if len(abstract) > 200:
+                        abstract = abstract[:197] + "..."
+                
+                # Extract concepts/topics
+                article_concepts = []
+                for concept in article.get("concepts", [])[:3]:
+                    concept_name = concept.get("display_name", "Unknown")
+                    concept_score = concept.get("score", 0)
+                    article_concepts.append(f"{concept_name} ({concept_score:.2f})")
+                
+                # Extract co-authors
+                co_authors = []
+                corresponding_authors = []
+                corresponding_institutions = []
+                
+                # Get corresponding author and institution IDs
+                corresponding_author_ids = article.get("corresponding_author_ids", [])
+                corresponding_institution_ids = article.get("corresponding_institution_ids", [])
+                
+                # Process authorships
+                for authorship in article.get("authorships", []):
+                    author_data = authorship.get("author", {})
+                    author_name = author_data.get("display_name", "Unknown")
+                    author_id = author_data.get("id", "")
+                    
+                    # Skip the main author
+                    if author_id == author.get("id"):
+                        continue
+                    
+                    # Add to co-authors
+                    co_authors.append(author_name)
+                    
+                    # Check if this is a corresponding author
+                    if author_id in corresponding_author_ids:
+                        corresponding_authors.append(author_name)
+                    
+                    # Get institutions for this author
+                    for institution in authorship.get("institutions", []):
+                        inst_id = institution.get("id", "")
+                        inst_name = institution.get("display_name", "Unknown")
+                        
+                        # Check if this is a corresponding institution
+                        if inst_id in corresponding_institution_ids:
+                            corresponding_institutions.append(inst_name)
+                
+                # Format article entry
+                result += f"  {i}. {title}\n"
+                result += f"     Published: {pub_date} ({year}) in {venue}\n"
+                result += f"     Citations: {citations}\n"
+                
+                # Add status flags
+                status_flags = []
+                if is_retracted:
+                    status_flags.append("RETRACTED")
+                if is_paratext:
+                    status_flags.append("PARATEXT")
+                if has_fulltext:
+                    status_flags.append("Full text available")
+                
+                if status_flags:
+                    result += f"     Status: {', '.join(status_flags)}\n"
+                
+                if indexed_in:
+                    result += f"     Indexed in: {indexed_str}\n"
+                
+                if id_strings:
+                    result += f"     IDs: {' | '.join(id_strings)}\n"
+                
+                if article_concepts:
+                    result += f"     Topics: {', '.join(article_concepts)}\n"
+                
+                if keyword_list:
+                    # Limit to first 5 keywords if there are many
+                    displayed_keywords = keyword_list[:5]
+                    if len(keyword_list) > 5:
+                        displayed_keywords.append("...")
+                    result += f"     Keywords: {', '.join(displayed_keywords)}\n"
+                
+                if co_authors:
+                    # Limit to first 3 co-authors if there are many
+                    displayed_coauthors = co_authors[:3]
+                    if len(co_authors) > 3:
+                        displayed_coauthors.append("et al.")
+                    result += f"     Co-authors: {', '.join(displayed_coauthors)}\n"
+                
+                if corresponding_authors:
+                    result += f"     Corresponding author(s): {', '.join(corresponding_authors)}\n"
+                
+                if corresponding_institutions:
+                    result += f"     Corresponding institution(s): {', '.join(corresponding_institutions)}\n"
+                
+                if abstract:
+                    result += f"     Abstract: {abstract}\n"
+                
+                result += f"     OpenAlex ID: {article.get('id', '')}\n"
+                result += "\n"
         
         return result
         
