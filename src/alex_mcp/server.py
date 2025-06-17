@@ -804,9 +804,15 @@ async def search_works(
         
         results = data.get("results", [])
         if not results:
-            return f"No works found for '{query}'"
+            return f"No works found matching your criteria"
         
-        result = f"Found {data.get('meta', {}).get('count', len(results))} works for '{query}':\n\n"
+        # Safely get the count
+        meta = data.get("meta", {})
+        count = meta.get("count", len(results)) if meta else len(results)
+        
+        # Create a safe query display
+        query_display = f"'{query}'" if query else "your criteria"
+        result = f"Found {count} works matching {query_display}:\n\n"
         
         for i, work in enumerate(results, 1):
             # Extract authors
@@ -995,9 +1001,15 @@ async def search_topics(
         
         results = data.get("results", [])
         if not results:
-            return f"No topics found for '{query}'"
+            return f"No topics found matching your criteria"
         
-        result = f"Found {data.get('meta', {}).get('count', len(results))} topics for '{query}':\n\n"
+        # Safely get the count
+        meta = data.get("meta", {})
+        count = meta.get("count", len(results)) if meta else len(results)
+        
+        # Create a safe query display
+        query_display = f"'{query}'" if query else "your criteria"
+        result = f"Found {count} topics matching {query_display}:\n\n"
         
         for i, topic in enumerate(results, 1):
             # Extract related concepts
@@ -1181,9 +1193,15 @@ async def search_sources(
         
         results = data.get("results", [])
         if not results:
-            return f"No sources found for '{query}'"
+            return f"No sources found matching your criteria"
         
-        result = f"Found {data.get('meta', {}).get('count', len(results))} sources for '{query}':\n\n"
+        # Safely get the count
+        meta = data.get("meta", {})
+        count = meta.get("count", len(results)) if meta else len(results)
+        
+        # Create a safe query display
+        query_display = f"'{query}'" if query else "your criteria"
+        result = f"Found {count} sources matching {query_display}:\n\n"
         
         for i, source in enumerate(results, 1):
             # Extract metrics
