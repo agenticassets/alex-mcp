@@ -18,9 +18,11 @@ License: MIT
 
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional, Sequence
 from dataclasses import dataclass
 import json
+import urllib.parse
 
 import httpx
 from fastmcp import FastMCP
@@ -34,7 +36,8 @@ mcp = FastMCP("OpenAlex Academic Research")
 
 # Constants
 OPENALEX_BASE_URL = "https://api.openalex.org"
-USER_AGENT = "OpenAlex-MCP-Server/1.0 (research@example.com)"
+USER_AGENT = "OpenAlex-MCP-Server/1.0 (jorge.abreu@embo.org)"
+CONTACT_EMAIL = "jorge.abreu@embo.org"  # Replace with your actual email
 
 # Global HTTP client
 http_client: Optional[httpx.AsyncClient] = None
@@ -76,6 +79,30 @@ async def get_http_client() -> httpx.AsyncClient:
             timeout=30.0
         )
     return http_client
+
+def add_email_param(params: dict) -> dict:
+    """Add email parameter to API requests to reduce rate limiting"""
+    if params is None:
+        params = {}
+    params["mailto"] = CONTACT_EMAIL
+    return params
+
+def safe_filter_value(value: str) -> str:
+    """
+    Properly encode a filter value for OpenAlex API
+    
+    Removes quotes and ensures proper URL encoding for special characters
+    """
+    if not value:
+        return value
+    
+    # Remove quotes as they should be avoided where possible
+    value = value.replace('"', '')
+    
+    # URL encode spaces and other special characters
+    # The actual URL encoding will be handled by httpx, but we need to
+    # ensure the filter syntax is correct
+    return value
 
 async def cleanup_http_client():
     """Clean up HTTP client"""
@@ -247,6 +274,8 @@ async def disambiguate_author(
             else:
                 params["filter"] = affiliation_filter
         
+        # Add email parameter to reduce rate limiting
+        params = add_email_param(params)
         response = await client.get("/authors", params=params)
         response.raise_for_status()
         data = response.json()
@@ -722,47 +751,84 @@ async def author_autocomplete(
 
 @mcp.tool(
     annotations={
-        "title": "Search Works",
+        "title": "Search Author Works",
         "readOnlyHint": True,
         "openWorldHint": True
     }
 )
-async def search_works(
-    query: str,
-    author_name: Optional[str] = None,
+async def search_author_works(
+    author_name: str,
+    query: Optional[str] = None,
     publication_year: Optional[str] = None,
     from_year: Optional[str] = None,
     to_year: Optional[str] = None,
     source_type: Optional[str] = None,
     topic: Optional[str] = None,
-    sort_by: Optional[str] = "relevance",
-    limit: Optional[int] = 20
+    sort_by: Optional[str] = "publication_date",
+    limit: Optional[int] = 50
 ) -> str:
     """
-    Search for scholarly works (publications) with advanced filtering.
+    Search for all articles by a specific author with optional filtering.
     
-    The query parameter is required. Other parameters are optional filters.
+    The author_name parameter is required. Other parameters are optional filters.
+    Returns all articles (type:article) by the specified author.
     For date ranges, you can either use publication_year with a range format (e.g., "2020-2023")
     or use the from_year and to_year parameters separately.
     """
     try:
+        # Add a small delay to avoid rate limiting
+        await asyncio.sleep(0.2)
+        
         client = await get_http_client()
         
-        # Initialize parameters
+        # STEP 1: First search for the author by name to get their ID
+        # This is necessary because OpenAlex doesn't support filtering works by author name directly
+        author_params = {
+            "search": author_name,
+            "per-page": 5,  # Get top 5 matches
+            "select": "id,display_name,works_count"
+        }
+        
+        # Add email parameter to reduce rate limiting
+        author_params = add_email_param(author_params)
+        
+        # Search for the author
+        author_response = await client.get("/authors", params=author_params)
+        author_response.raise_for_status()
+        author_data = author_response.json()
+        
+        # Check if we found any authors
+        author_results = author_data.get("results", [])
+        if not author_results:
+            return f"No authors found matching '{author_name}'"
+        
+        # Get the first (best) matching author
+        author = author_results[0]
+        author_id = author.get("id", "")
+        author_display_name = author.get("display_name", "Unknown")
+        
+        # Add a small delay between requests to avoid rate limiting
+        await asyncio.sleep(0.2)
+        
+        # STEP 2: Now search for works by this author using their ID
+        # Initialize parameters for works search
         params = {
-            "per-page": min(limit or 20, 100),
+            "per-page": min(limit or 50, 100),
             "select": "id,title,publication_year,type,open_access,authorships,primary_location,cited_by_count,abstract_inverted_index"
         }
         
-        # Add search query - handle empty/null query
+        # Add search query if provided
         if query and query.strip():
             params["search"] = query.strip()
         
-        # Add filters - only add non-empty/non-null filters
+        # Build filters - author ID is required, others are optional
         filters = []
         
-        if author_name and author_name.strip():
-            filters.append(f'author.display_name.search:"{author_name.strip()}"')
+        # Author filter using the ID we found
+        filters.append(f'authorships.author.id:{author_id}')
+        
+        # Always filter for articles only
+        filters.append('type:article')
         
         # Handle publication year filtering with multiple options
         if publication_year and publication_year.strip():
@@ -782,14 +848,19 @@ async def search_works(
             elif to_year and to_year.strip():
                 filters.append(f'publication_year:<={to_year.strip()}')
         
-        if source_type and source_type.strip():
+        # Override source_type if provided, but default to article
+        if source_type and source_type.strip() and source_type.strip() != "article":
+            # Remove the default article filter and add the custom type
+            filters = [f for f in filters if not f.startswith('type:')]
             filters.append(f'type:{source_type.strip()}')
         
         if topic and topic.strip():
-            filters.append(f'concepts.display_name.search:"{topic.strip()}"')
+            # Properly encode the topic
+            safe_topic = safe_filter_value(topic.strip())
+            filters.append(f'concepts.display_name.search:{safe_topic}')
         
-        if filters:
-            params["filter"] = ",".join(filters)
+        # Apply filters
+        params["filter"] = ",".join(filters)
         
         # Add sorting
         if sort_by and sort_by.strip():
@@ -797,6 +868,13 @@ async def search_works(
                 params["sort"] = "cited_by_count:desc"
             elif sort_by.strip() == "publication_date":
                 params["sort"] = "publication_date:desc"
+            else:
+                params["sort"] = "publication_date:desc"  # Default to publication date
+        else:
+            params["sort"] = "publication_date:desc"  # Default sorting
+        
+        # Add email parameter to reduce rate limiting
+        params = add_email_param(params)
         
         response = await client.get("/works", params=params)
         response.raise_for_status()
@@ -804,15 +882,17 @@ async def search_works(
         
         results = data.get("results", [])
         if not results:
-            return f"No works found matching your criteria"
+            return f"No articles found for author '{author_name}'"
         
         # Safely get the count
         meta = data.get("meta", {})
         count = meta.get("count", len(results)) if meta else len(results)
         
-        # Create a safe query display
-        query_display = f"'{query}'" if query and query.strip() else "your criteria"
-        result = f"Found {count} works matching {query_display}:\n\n"
+        # Create result header
+        result = f"Found {count} articles by '{author_name}'"
+        if query and query.strip():
+            result += f" matching '{query}'"
+        result += ":\n\n"
         
         for i, work in enumerate(results, 1):
             # Extract authors
@@ -860,8 +940,12 @@ async def search_works(
         return result
         
     except Exception as e:
-        logger.error(f"Error in search_works: {e}")
-        return f"Error: {str(e)}"
+        if "403" in str(e) or "FORBIDDEN" in str(e):
+            logger.warning(f"OpenAlex API rate limit hit (403 FORBIDDEN): {e}")
+            return f"OpenAlex API rate limit hit. This is a temporary issue with the API, not with your query. Please try again later or with a different author name."
+        else:
+            logger.error(f"Error in search_author_works: {e}")
+            return f"Error: {str(e)}"
 
 @mcp.tool(
     annotations={
