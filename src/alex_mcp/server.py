@@ -756,17 +756,17 @@ async def search_works(
             # No need to add any filters, just get the most recent works
         
         # Add search query if provided
-        if query:
+        if query is not None:
             params["search"] = query
         
         # Add filters
         filters = []
         
-        if author_name:
+        if author_name is not None:
             filters.append(f'author.display_name.search:"{author_name}"')
         
         # Handle publication year filtering with multiple options
-        if publication_year:
+        if publication_year is not None:
             # Handle range like "2020-2023" or single year like "2023"
             if "-" in publication_year:
                 start_year, end_year = publication_year.split("-")
@@ -775,24 +775,24 @@ async def search_works(
                 filters.append(f'publication_year:{publication_year}')
         else:
             # Handle from_year and to_year if provided
-            if from_year and to_year:
+            if from_year is not None and to_year is not None:
                 filters.append(f'publication_year:>={from_year},<={to_year}')
-            elif from_year:
+            elif from_year is not None:
                 filters.append(f'publication_year:>={from_year}')
-            elif to_year:
+            elif to_year is not None:
                 filters.append(f'publication_year:<={to_year}')
         
-        if source_type:
+        if source_type is not None:
             filters.append(f'type:{source_type}')
         
-        if topic:
+        if topic is not None:
             filters.append(f'concepts.display_name.search:"{topic}"')
         
         if filters:
             params["filter"] = ",".join(filters)
         
         # Add sorting
-        if sort_by:
+        if sort_by is not None:
             if sort_by == "cited_by_count":
                 params["sort"] = "cited_by_count:desc"
             elif sort_by == "publication_date":
