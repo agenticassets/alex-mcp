@@ -734,14 +734,13 @@ async def search_works(
     """
     Search for scholarly works (publications) with advanced filtering.
     
-    All parameters are optional, but at least one search criterion should be provided.
+    All parameters are optional. If no parameters are provided, recent works will be returned.
     For date ranges, you can either use publication_year with a range format (e.g., "2020-2023")
     or use the from_year and to_year parameters separately.
     """
     try:
-        # Check if at least one search criterion is provided
-        if not any([query, author_name, publication_year, from_year, to_year, source_type, topic]):
-            return "Error: At least one search criterion must be provided (query, author_name, publication_year, from_year, to_year, source_type, or topic)."
+        # If no search criteria are provided, we'll return recent works
+        default_search = not any([query, author_name, publication_year, from_year, to_year, source_type, topic])
         
         client = await get_http_client()
         
@@ -750,6 +749,11 @@ async def search_works(
             "per-page": min(limit or 20, 100),
             "select": "id,title,publication_year,type,open_access,authorships,primary_location,cited_by_count,abstract_inverted_index"
         }
+        
+        # For default search with no parameters, get recent works
+        if default_search:
+            params["sort"] = "publication_date:desc"
+            # No need to add any filters, just get the most recent works
         
         # Add search query if provided
         if query:
@@ -961,17 +965,21 @@ async def search_topics(
     Search and explore research topics with detailed information.
     """
     try:
-        # Check if at least query is provided
-        if not query:
-            return "Error: A search query must be provided."
+        # If no query is provided, return popular topics
+        default_search = not query
             
         client = await get_http_client()
         
         params = {
-            "search": query,
             "per-page": min(limit, 50),
             "select": "id,display_name,description,level,works_count,cited_by_count,related_concepts"
         }
+        
+        # For default search, get popular topics sorted by works count
+        if default_search:
+            params["sort"] = "works_count:desc"
+        else:
+            params["search"] = query
         
         # Add filters
         filters = []
@@ -1140,17 +1148,21 @@ async def search_sources(
     Search for publication sources (journals, conferences, repositories).
     """
     try:
-        # Check if at least one search criterion is provided
-        if not any([query, source_type, subject_area]):
-            return "Error: At least one search criterion must be provided (query, source_type, or subject_area)."
+        # If no search criteria are provided, return popular sources
+        default_search = not any([query, source_type, subject_area])
             
         client = await get_http_client()
         
         params = {
-            "search": query,
             "per-page": min(limit, 50),
             "select": "id,display_name,type,publisher,country_code,is_oa,is_in_doaj,homepage_url,works_count,cited_by_count,summary_stats"
         }
+        
+        # For default search, get popular sources sorted by works count
+        if default_search:
+            params["sort"] = "works_count:desc"
+        elif query:
+            params["search"] = query
         
         # Add filters
         filters = []
