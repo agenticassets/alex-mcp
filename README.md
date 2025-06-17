@@ -41,20 +41,28 @@ A professional Model Context Protocol (MCP) server for author disambiguation and
 
 ### Installation
 
+For detailed installation instructions, see [INSTALL.md](INSTALL.md).
+
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/openalex-author-disambiguation-mcp.git
-   cd openalex-author-disambiguation-mcp
+   git clone https://github.com/drAbreu/alex-mcp.git
+   cd alex-mcp
    ```
 
-2. **Install dependencies:**
+2. **Create a virtual environment:**
    ```bash
-   pip install -r requirements.txt
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. **Test the server:**
+3. **Install the package:**
    ```bash
-   python server.py
+   pip install -e .
+   ```
+
+4. **Run the server:**
+   ```bash
+   ./run_alex_mcp.sh
    ```
 
 ## ⚙️ MCP Configuration
@@ -63,82 +71,21 @@ A professional Model Context Protocol (MCP) server for author disambiguation and
 
 Add to your Claude Desktop configuration file:
 
-**macOS/Linux:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
 ```json
 {
   "mcpServers": {
-    "openalex-author-disambiguation": {
-      "command": "python3.10",
-      "args": ["/absolute/path/to/your/project/server.py"],
-      "env": {
-        "PYTHONPATH": "/absolute/path/to/your/project"
-      }
+    "alex-mcp": {
+      "command": "/path/to/alex-mcp/run_alex_mcp.sh"
     }
   }
 }
 ```
 
-### Alternative Configuration Options
+Replace `/path/to/alex-mcp` with the actual path to the repository on your system.
 
-#### Using Python Virtual Environment
-```json
-{
-  "mcpServers": {
-    "openalex-author-disambiguation": {
-      "command": "/path/to/your/venv/bin/python",
-      "args": ["/absolute/path/to/server.py"]
-    }
-  }
-}
-```
+## 🛠️ Available Tools
 
-#### Using UV (Python Package Manager)
-```json
-{
-  "mcpServers": {
-    "openalex-author-disambiguation": {
-      "command": "uv",
-      "args": ["run", "python", "/absolute/path/to/server.py"],
-      "cwd": "/absolute/path/to/your/project"
-    }
-  }
-}
-```
-
-### Configuration Verification
-
-After adding the configuration:
-
-1. **Restart Claude Desktop** completely
-2. **Check server status** in Claude Desktop settings
-3. **Test a simple command** like:
-   ```
-   Can you help me disambiguate the author "John Smith"?
-   ```
-
-### Troubleshooting MCP Connection
-
-If the server doesn't appear in Claude Desktop:
-
-1. **Check Python version**: Ensure Python 3.10+ is installed
-2. **Verify file paths**: Use absolute paths in configuration
-3. **Check permissions**: Ensure server.py is executable
-4. **View logs**: Check Claude Desktop logs for error messages
-5. **Test manually**: Run `python3.10 server.py` to verify it starts
-
-### MCP Server Information
-
-- **Server Name**: `openalex-author-disambiguation`
-- **Protocol**: Model Context Protocol (MCP)
-- **Tools**: 10 professional research intelligence tools
-- **Resources**: None (read-only server)
-- **Prompts**: None (tool-based interaction)
-
-## 🛠️ Available Tools (10 Professional Tools)
-
-### 🔍 **Author Disambiguation & Search (5 Tools)**
+### 🔍 **Author Disambiguation & Search**
 
 #### 1. **disambiguate_author**
 Disambiguate an author using OpenAlex's ML-powered system.
@@ -175,57 +122,6 @@ Resolve institution names and abbreviations.
 - `MIT` → `Massachusetts Institute of Technology`
 - `Stanford` → `Stanford University`
 - `Max Planck` → `Max Planck Society`
-
-#### 5. **autocomplete_authors**
-Fast autocomplete search for interactive applications.
-
-**Parameters:**
-- `query` (required): Partial author name
-- `limit` (optional): Maximum suggestions (1-25, default: 10)
-
-### 📚 **Research Intelligence & Discovery (5 New Tools)**
-
-#### 6. **search_works**
-Search for scholarly works (publications) with advanced filtering.
-
-**Parameters:**
-- `query` (required): Search query for title, abstract, or content
-- `author_name` (optional): Filter by author name
-- `publication_year` (optional): Filter by year (e.g., "2023" or "2020-2023")
-- `source_type` (optional): Filter by type ("journal-article", "book", "dataset", etc.)
-- `topic` (optional): Filter by research topic or field
-- `sort_by` (optional): Sort order ("relevance", "cited_by_count", "publication_date")
-- `limit` (optional): Maximum results (1-100, default: 20)
-
-#### 7. **get_work_details**
-Get comprehensive details about a specific scholarly work.
-
-**Parameters:**
-- `work_id` (required): OpenAlex work ID (e.g., 'W2741809807' or full URL)
-
-#### 8. **search_topics**
-Search and explore research topics with detailed information.
-
-**Parameters:**
-- `query` (required): Topic name or description to search for
-- `level` (optional): Topic hierarchy level (0-5, where 0 is most general)
-- `limit` (optional): Maximum topics to return (1-50, default: 20)
-
-#### 9. **analyze_text_aboutness**
-Analyze text to determine research topics, keywords, and concepts using machine learning.
-
-**Parameters:**
-- `title` (required): Title of the text to analyze
-- `abstract` (optional): Abstract or description text (improves accuracy)
-
-#### 10. **search_sources**
-Search for publication sources (journals, conferences, repositories).
-
-**Parameters:**
-- `query` (required): Source name or description to search for
-- `source_type` (optional): Filter by type ("journal", "conference", "repository", "book")
-- `subject_area` (optional): Filter by subject area or field
-- `limit` (optional): Maximum sources to return (1-50, default: 20)
 
 ## 📊 Example Usage
 
@@ -278,87 +174,19 @@ Homepage: https://web.mit.edu/
 ### MCP Best Practices
 - **FastMCP Framework** - Uses the official FastMCP framework for clean, maintainable code
 - **Tool Annotations** - Proper MCP annotations (`readOnlyHint`, `openWorldHint`)
-- **Error Handling** - MCP-compliant error responses with `isError` flag
+- **Error Handling** - MCP-compliant error responses
 - **Resource Management** - Proper startup/shutdown lifecycle management
 
 ### Code Structure
 ```
-server.py                 # Main MCP server with FastMCP
-requirements.txt          # Clean, minimal dependencies
-examples/                 # Comprehensive test suite
-├── test_*.py            # Individual tool tests
-└── README.md            # Example documentation
+src/alex_mcp/           # Main package directory
+├── __init__.py        # Package initialization
+└── server.py          # MCP server implementation
+run_server.py           # Script to run the server
+run_alex_mcp.sh         # Shell script to run the server in the virtual environment
+requirements.txt        # Dependencies
+INSTALL.md              # Installation instructions
 ```
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
-
-```bash
-cd examples
-python test_fiona_watt_disambiguation.py
-python test_institution_resolution.py
-```
-
-## 🔧 Development
-
-### Adding New Tools
-
-Following MCP best practices with FastMCP:
-
-```python
-@mcp.tool(
-    annotations={
-        "title": "Your Tool Title",
-        "readOnlyHint": True,  # If tool doesn't modify state
-        "openWorldHint": True  # If tool accesses external APIs
-    }
-)
-async def your_tool(param1: str, param2: int = 10) -> str:
-    """
-    Tool description for the LLM.
-    
-    Args:
-        param1: Description of required parameter
-        param2: Description of optional parameter with default
-    """
-    # Implementation
-    return "Result"
-```
-
-### Error Handling
-
-Follow MCP error handling patterns:
-
-```python
-try:
-    # Tool logic
-    return "Success result"
-except Exception as e:
-    logger.error(f"Error in tool: {e}")
-    return f"Error: {str(e)}"
-```
-
-## 📚 OpenAlex Integration
-
-### API Features Used
-- **Author Search** - Advanced search with filters
-- **Author Profiles** - Comprehensive author data
-- **Institution Search** - Institution resolution and metadata
-- **Autocomplete** - Fast type-ahead suggestions
-
-### Rate Limiting
-- Respectful API usage with built-in delays
-- Efficient HTTP client with connection pooling
-- Proper resource cleanup on shutdown
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Follow MCP best practices
-4. Add comprehensive tests
-5. Submit a pull request
 
 ## 📄 License
 
@@ -369,12 +197,6 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [OpenAlex](https://openalex.org) for providing the comprehensive academic database
 - [Model Context Protocol](https://modelcontextprotocol.io) for the excellent framework
 - [FastMCP](https://github.com/modelcontextprotocol/python-sdk) for the clean Python implementation
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-username/openalex-author-disambiguation-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/openalex-author-disambiguation-mcp/discussions)
-- **MCP Documentation**: [Model Context Protocol](https://modelcontextprotocol.io)
 
 ---
 
