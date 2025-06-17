@@ -107,10 +107,11 @@ Search for authors with advanced filtering.
 - `limit` (optional): Maximum results (1-25, default: 10)
 
 #### 3. **get_author_profile**
-Get detailed author profile by OpenAlex ID.
+Get detailed author profile by OpenAlex ID, including recent articles.
 
 **Parameters:**
 - `openalex_id` (required): OpenAlex author ID
+- `max_works` (optional): Maximum number of recent articles to include (default: 10)
 
 #### 4. **resolve_institution**
 Resolve institution names and abbreviations.

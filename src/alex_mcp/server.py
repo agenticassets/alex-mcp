@@ -474,9 +474,16 @@ async def get_author_profile(openalex_id: str, max_works: int = 50) -> str:
                 # Extract abstract
                 abstract = ""
                 if article.get("abstract_inverted_index"):
-                    abstract_words = []
-                    for position, word in sorted(article.get("abstract_inverted_index").items()):
-                        abstract_words.append(word)
+                    # abstract_inverted_index is {word: [positions]}, not {position: word}
+                    word_positions = []
+                    for word, positions in article.get("abstract_inverted_index").items():
+                        if isinstance(positions, list) and positions:
+                            # Take the first position for each word
+                            word_positions.append((positions[0], word))
+                    
+                    # Sort by position and join words
+                    word_positions.sort(key=lambda x: x[0])
+                    abstract_words = [word for _, word in word_positions]
                     abstract = " ".join(abstract_words)
                     if len(abstract) > 200:
                         abstract = abstract[:197] + "..."
@@ -721,7 +728,7 @@ async def author_autocomplete(
     }
 )
 async def search_works(
-    query: Optional[str] = None,
+    query: str,
     author_name: Optional[str] = None,
     publication_year: Optional[str] = None,
     from_year: Optional[str] = None,
@@ -734,14 +741,11 @@ async def search_works(
     """
     Search for scholarly works (publications) with advanced filtering.
     
-    All parameters are optional. If no parameters are provided, recent works will be returned.
+    The query parameter is required. Other parameters are optional filters.
     For date ranges, you can either use publication_year with a range format (e.g., "2020-2023")
     or use the from_year and to_year parameters separately.
     """
     try:
-        # If no search criteria are provided, we'll return recent works
-        default_search = not any([query, author_name, publication_year, from_year, to_year, source_type, topic])
-        
         client = await get_http_client()
         
         # Initialize parameters
@@ -750,52 +754,48 @@ async def search_works(
             "select": "id,title,publication_year,type,open_access,authorships,primary_location,cited_by_count,abstract_inverted_index"
         }
         
-        # For default search with no parameters, get recent works
-        if default_search:
-            params["sort"] = "publication_date:desc"
-            # No need to add any filters, just get the most recent works
+        # Add search query - handle empty/null query
+        if query and query.strip():
+            params["search"] = query.strip()
         
-        # Add search query if provided
-        if query is not None:
-            params["search"] = query
-        
-        # Add filters
+        # Add filters - only add non-empty/non-null filters
         filters = []
         
-        if author_name is not None:
-            filters.append(f'author.display_name.search:"{author_name}"')
+        if author_name and author_name.strip():
+            filters.append(f'author.display_name.search:"{author_name.strip()}"')
         
         # Handle publication year filtering with multiple options
-        if publication_year is not None:
+        if publication_year and publication_year.strip():
             # Handle range like "2020-2023" or single year like "2023"
-            if "-" in publication_year:
-                start_year, end_year = publication_year.split("-")
-                filters.append(f'publication_year:>={start_year},<={end_year}')
+            year_str = publication_year.strip()
+            if "-" in year_str:
+                start_year, end_year = year_str.split("-", 1)
+                filters.append(f'publication_year:>={start_year.strip()},<={end_year.strip()}')
             else:
-                filters.append(f'publication_year:{publication_year}')
+                filters.append(f'publication_year:{year_str}')
         else:
             # Handle from_year and to_year if provided
-            if from_year is not None and to_year is not None:
-                filters.append(f'publication_year:>={from_year},<={to_year}')
-            elif from_year is not None:
-                filters.append(f'publication_year:>={from_year}')
-            elif to_year is not None:
-                filters.append(f'publication_year:<={to_year}')
+            if from_year and from_year.strip() and to_year and to_year.strip():
+                filters.append(f'publication_year:>={from_year.strip()},<={to_year.strip()}')
+            elif from_year and from_year.strip():
+                filters.append(f'publication_year:>={from_year.strip()}')
+            elif to_year and to_year.strip():
+                filters.append(f'publication_year:<={to_year.strip()}')
         
-        if source_type is not None:
-            filters.append(f'type:{source_type}')
+        if source_type and source_type.strip():
+            filters.append(f'type:{source_type.strip()}')
         
-        if topic is not None:
-            filters.append(f'concepts.display_name.search:"{topic}"')
+        if topic and topic.strip():
+            filters.append(f'concepts.display_name.search:"{topic.strip()}"')
         
         if filters:
             params["filter"] = ",".join(filters)
         
         # Add sorting
-        if sort_by is not None:
-            if sort_by == "cited_by_count":
+        if sort_by and sort_by.strip():
+            if sort_by.strip() == "cited_by_count":
                 params["sort"] = "cited_by_count:desc"
-            elif sort_by == "publication_date":
+            elif sort_by.strip() == "publication_date":
                 params["sort"] = "publication_date:desc"
         
         response = await client.get("/works", params=params)
@@ -811,28 +811,37 @@ async def search_works(
         count = meta.get("count", len(results)) if meta else len(results)
         
         # Create a safe query display
-        query_display = f"'{query}'" if query else "your criteria"
+        query_display = f"'{query}'" if query and query.strip() else "your criteria"
         result = f"Found {count} works matching {query_display}:\n\n"
         
         for i, work in enumerate(results, 1):
             # Extract authors
             authors = []
             for authorship in work.get("authorships", [])[:3]:
-                author_name = authorship.get("author", {}).get("display_name", "Unknown")
-                authors.append(author_name)
+                author_name_work = authorship.get("author", {}).get("display_name", "Unknown")
+                authors.append(author_name_work)
             
             if len(work.get("authorships", [])) > 3:
                 authors.append("et al.")
             
             # Extract venue
-            venue = work.get("primary_location", {}).get("source", {}).get("display_name", "Unknown venue")
+            primary_location = work.get("primary_location") or {}
+            source = primary_location.get("source") or {}
+            venue = source.get("display_name", "Unknown venue")
             
             # Extract abstract
             abstract = ""
             if work.get("abstract_inverted_index"):
-                abstract_words = []
-                for position, word in sorted(work.get("abstract_inverted_index").items()):
-                    abstract_words.append(word)
+                # abstract_inverted_index is {word: [positions]}, not {position: word}
+                word_positions = []
+                for word, positions in work.get("abstract_inverted_index").items():
+                    if isinstance(positions, list) and positions:
+                        # Take the first position for each word
+                        word_positions.append((positions[0], word))
+                
+                # Sort by position and join words
+                word_positions.sort(key=lambda x: x[0])
+                abstract_words = [word for _, word in word_positions]
                 abstract = " ".join(abstract_words)
                 if len(abstract) > 200:
                     abstract = abstract[:197] + "..."
@@ -906,9 +915,16 @@ async def get_work_details(work_id: str) -> str:
         # Extract abstract
         abstract = ""
         if work.get("abstract_inverted_index"):
-            abstract_words = []
-            for position, word in sorted(work.get("abstract_inverted_index").items()):
-                abstract_words.append(word)
+            # abstract_inverted_index is {word: [positions]}, not {position: word}
+            word_positions = []
+            for word, positions in work.get("abstract_inverted_index").items():
+                if isinstance(positions, list) and positions:
+                    # Take the first position for each word
+                    word_positions.append((positions[0], word))
+            
+            # Sort by position and join words
+            word_positions.sort(key=lambda x: x[0])
+            abstract_words = [word for _, word in word_positions]
             abstract = " ".join(abstract_words)
         
         # Extract concepts/topics
