@@ -9,3 +9,5 @@ httpx>=0.25.0
 
 # Optional: For enhanced logging and debugging
 rich>=13.0.0
+
+pyalex==0.18
