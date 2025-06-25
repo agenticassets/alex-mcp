@@ -1,135 +1,62 @@
 #!/usr/bin/env python3
 """
-Data objects for structured output from the OpenAlex MCP server
+Data models for the OpenAlex MCP server.
+
+Defines the structure of author search results and the overall search response,
+following the OpenAlex Author object specification:
+https://docs.openalex.org/api-entities/authors/author-object
 """
 
-from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from pydantic import BaseModel, Field
 
-@dataclass
-class WorkResult:
-    """Structured data object for a scholarly work"""
-    openalex_id: str
-    title: str
-    authors: List[str] = field(default_factory=list)
-    publication_year: Optional[int] = None
-    venue: Optional[str] = None
-    work_type: Optional[str] = None
-    citations: int = 0
-    is_open_access: bool = False
-    abstract: Optional[str] = None
-    doi: Optional[str] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "openalex_id": self.openalex_id,
-            "title": self.title,
-            "authors": self.authors,
-            "publication_year": self.publication_year,
-            "venue": self.venue,
-            "type": self.work_type,
-            "citations": self.citations,
-            "is_open_access": self.is_open_access,
-            "abstract": self.abstract,
-            "doi": self.doi
-        }
+class AuthorResult(BaseModel):
+    """
+    Represents a single author as returned by the OpenAlex API.
 
-@dataclass
-class AuthorResult:
-    """Structured data object for an author"""
-    openalex_id: str
-    display_name: str
+    Fields:
+        id: OpenAlex unique author ID (e.g., 'https://openalex.org/A123456789').
+        orcid: ORCID identifier if available.
+        display_name: Primary display name of the author.
+        display_name_alternatives: Alternative names for the author.
+        affiliations: List of current and past affiliations (institution objects).
+        cited_by_count: Total number of citations received by this author.
+        counts_by_year: List of yearly publication/citation counts.
+        ids: Dictionary of external IDs (e.g., OpenAlex, ORCID, etc.).
+        summary_stats: Summary statistics (e.g., h-index, i10-index).
+        updated_date: Last update date for this author record (ISO 8601).
+        works_api_url: API URL to retrieve all works by this author.
+        works_count: Total number of works (publications) by this author.
+        x_concepts: (Deprecated) List of concepts associated with this author.
+        topics: List of topic objects (future replacement for x_concepts).
+    """
+    id: str
     orcid: Optional[str] = None
-    institutions: List[str] = field(default_factory=list)
-    works_count: int = 0
-    cited_by_count: int = 0
-    h_index: Optional[int] = None
-    research_topics: List[str] = field(default_factory=list)
-    confidence_score: float = 0.0
-    match_reasons: List[str] = field(default_factory=list)
-    career_stage: str = "Unknown"
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "openalex_id": self.openalex_id,
-            "display_name": self.display_name,
-            "orcid": self.orcid,
-            "institutions": self.institutions,
-            "works_count": self.works_count,
-            "cited_by_count": self.cited_by_count,
-            "h_index": self.h_index,
-            "research_topics": self.research_topics,
-            "confidence_score": self.confidence_score,
-            "match_reasons": self.match_reasons,
-            "career_stage": self.career_stage
-        }
-
-@dataclass
-class InstitutionResult:
-    """Structured data object for an institution"""
-    openalex_id: str
     display_name: str
-    country_code: Optional[str] = None
-    institution_type: Optional[str] = None
-    homepage_url: Optional[str] = None
-    alternative_names: List[str] = field(default_factory=list)
-    match_score: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "openalex_id": self.openalex_id,
-            "display_name": self.display_name,
-            "country_code": self.country_code,
-            "type": self.institution_type,
-            "homepage_url": self.homepage_url,
-            "alternative_names": self.alternative_names,
-            "match_score": self.match_score
-        }
+    display_name_alternatives: Optional[List[str]] = None
+    affiliations: Optional[List[Dict[str, Any]]] = None
+    cited_by_count: int
+    counts_by_year: Optional[List[Dict[str, Any]]] = None
+    ids: Optional[Dict[str, str]] = None
+    summary_stats: Optional[Dict[str, Any]] = None
+    updated_date: Optional[str] = None
+    works_api_url: Optional[str] = None
+    works_count: int
+    x_concepts: Optional[List[Dict[str, Any]]] = None  # Deprecated, but included for now
+    topics: Optional[List[Dict[str, Any]]] = None      # For future compatibility
 
-@dataclass
-class TopicResult:
-    """Structured data object for a research topic"""
-    openalex_id: str
-    display_name: str
-    level: int
-    description: Optional[str] = None
-    works_count: int = 0
-    cited_by_count: int = 0
-    related_topics: List[str] = field(default_factory=list)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "openalex_id": self.openalex_id,
-            "display_name": self.display_name,
-            "level": self.level,
-            "description": self.description,
-            "works_count": self.works_count,
-            "cited_by_count": self.cited_by_count,
-            "related_topics": self.related_topics
-        }
+class SearchResponse(BaseModel):
+    """
+    Represents the response to an author search query.
 
-@dataclass
-class SearchResponse:
-    """Generic search response wrapper"""
+    Fields:
+        query: The original search query string.
+        total_count: Number of authors found matching the query.
+        results: List of AuthorResult objects.
+        search_time: Timestamp when the search was performed.
+    """
     query: str
     total_count: int
-    results: List[Any] = field(default_factory=list)
-    search_time: Optional[datetime] = None
-    
-    def __post_init__(self):
-        if self.search_time is None:
-            self.search_time = datetime.now()
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
-        return {
-            "query": self.query,
-            "total_count": self.total_count,
-            "results": [r.to_dict() if hasattr(r, 'to_dict') else r for r in self.results],
-            "search_time": self.search_time.isoformat() if self.search_time else None
-        }
+    results: List[AuthorResult]
+    search_time: Optional[datetime] = Field(default_factory=datetime.now)

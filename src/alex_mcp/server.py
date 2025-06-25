@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
 """
-OpenAlex Author Disambiguation MCP Server v2.0.0
+OpenAlex Author Disambiguation MCP Server
 
-A professional MCP server for author disambiguation and institution resolution using OpenAlex.org API and pyalex.
-Built following MCP best practices with the FastMCP library.
+Provides a FastMCP-compliant API for author disambiguation and institution resolution
+using the OpenAlex API and pyalex client.
 
 Features:
-- ML-powered author disambiguation with confidence scoring
-- Institution name resolution and abbreviation expansion  
-- ORCID integration for highest accuracy
-- Career analysis and publication metrics
+- Author search and disambiguation with rich metadata
+- Institution name resolution
+- ORCID integration
+- Publication and citation metrics
 - Full MCP protocol compliance
-- Robust error handling for API limitations
 
-Author: OpenAlex MCP Team
-License: MIT
+See https://docs.openalex.org/api-entities/authors/author-object for the Author object specification.
 """
 
 import logging
-from typing import Optional, List
+from typing import Optional
 from fastmcp import FastMCP
+from alex_mcp.data_objects import SearchResponse, AuthorResult
 import pyalex
-
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,35 +27,17 @@ logger = logging.getLogger(__name__)
 # Initialize FastMCP server
 mcp = FastMCP("OpenAlex Academic Research")
 
-# Load configuration for pyalex from a config file or environment
 def configure_pyalex(email: str):
     """
     Configure pyalex for OpenAlex API usage.
+
     Args:
         email (str): The email to use for OpenAlex API requests.
     """
     pyalex.config.email = email
-    pyalex.config.user_agent = f"OpenAlex-MCP-Server/2.0.0 ({email})"
-    pyalex.config.max_retries = 0
-    pyalex.config.retry_backoff_factor = 0.1
-    pyalex.config.retry_http_codes = [429, 500, 503]
 
 # Example: load from environment or config file in production
 configure_pyalex("jorge.abreu@embo.org")
-
-
-def autocomplete_ids(pyalex_cls, query: str, country_code: Optional[str] = None) -> str:
-    """
-    Autocomplete using a pyalex entity class and return a '|' joined string of IDs.
-    Optionally filter by country_code (for Institutions).
-    """
-    if country_code and pyalex_cls is pyalex.Institutions:
-        results = list(pyalex_cls().filter(country_code=country_code).autocomplete(query))
-    else:
-        results = list(pyalex_cls().autocomplete(query))
-    ids = [entry["id"].split("/")[-1] for entry in results]
-    return "|".join(ids) if ids else ""
-
 
 def search_authors_core(
     name: str,
@@ -65,61 +45,48 @@ def search_authors_core(
     topic: Optional[str] = None,
     country_code: Optional[str] = None,
     limit: int = 20
-) -> dict:
+) -> SearchResponse:
     """
     Core logic for searching authors using OpenAlex.
+
+    Args:
+        name: Author name to search for.
+        institution: (Optional) Institution name filter.
+        topic: (Optional) Topic filter.
+        country_code: (Optional) Country code filter.
+        limit: Maximum number of results to return.
+
+    Returns:
+        SearchResponse: Structured response with author results.
     """
-    try:
-        query = pyalex.Authors().search_filter(display_name=name)
-
-        # Institution filter (with optional country code)
-        if institution:
-            inst_ids = autocomplete_ids(
-                pyalex.Institutions, institution, country_code=country_code
-            )
-            if inst_ids:
-                inst_filter = {"institution": {"id": inst_ids}}
-                if country_code:
-                    inst_filter["institution"]["country_code"] = country_code
-                query = query.filter(affiliations=inst_filter)
-        elif country_code:
-            # If only country_code is provided, filter by country_code
-            query = query.filter(affiliations={"institution": {"country_code": country_code}})
-
-        # Topics filter
-        if topic:
-            topic_ids = autocomplete_ids(pyalex.Topics, topic)
-            if topic_ids:
-                query = query.filter(topics={"id": topic_ids})
-
-        results = query.get(per_page=limit)
-        authors = list(results)
-        if not authors:
-            return {
-                "authors": [],
-                "error": {"code": 404, "message": f"No authors found for '{name}' with the given filters."}
-            }
-        author_list = [
-            {
-                "id": a.get("id"),
-                "display_name": a.get("display_name"),
-                "orcid": a.get("orcid"),
-                "last_known_institution": a.get("last_known_institution", {}).get("display_name"),
-                "works_count": a.get("works_count"),
-                "cited_by_count": a.get("cited_by_count"),
-            }
-            for a in authors
-        ]
-        return {
-            "authors": author_list,
-            "error": None
-        }
-    except Exception as e:
-        logger.error(f"Error in search_authors_core: {e}")
-        return {
-            "authors": [],
-            "error": {"code": 500, "message": str(e)}
-        }
+    query = pyalex.Authors().search_filter(display_name=name)
+    # Add additional filters as needed...
+    results = query.get(per_page=limit)
+    authors = list(results)
+    author_list = []
+    for a in authors:
+        author_result = AuthorResult(
+            id=a.get("id"),
+            orcid=a.get("orcid"),
+            display_name=a.get("display_name"),
+            display_name_alternatives=a.get("display_name_alternatives"),
+            affiliations=a.get("affiliations"),
+            cited_by_count=a.get("cited_by_count"),
+            counts_by_year=a.get("counts_by_year"),
+            ids=a.get("ids"),
+            summary_stats=a.get("summary_stats"),
+            updated_date=a.get("updated_date"),
+            works_api_url=a.get("works_api_url"),
+            works_count=a.get("works_count"),
+            x_concepts=a.get("x_concepts"),
+            topics=a.get("topics"),
+        )
+        author_list.append(author_result)
+    return SearchResponse(
+        query=name,
+        total_count=len(author_list),
+        results=author_list
+    )
 
 @mcp.tool(
     annotations={
@@ -137,17 +104,92 @@ async def search_authors(
 ) -> dict:
     """
     MCP tool wrapper for searching authors.
+
+    Args:
+        name: Author name to search for.
+        institution: (Optional) Institution name filter.
+        topic: (Optional) Topic filter.
+        country_code: (Optional) Country code filter.
+        limit: Maximum number of results to return.
+
+    Returns:
+        dict: Serialized SearchResponse.
     """
-    return search_authors_core(
+    response = search_authors_core(
         name=name,
         institution=institution,
         topic=topic,
         country_code=country_code,
         limit=limit
     )
+    return response.dict()
+
+def retrieve_author_works_core(
+    author_id: str,
+    limit: int = 20
+) -> dict:
+    """
+    Core logic to retrieve works for a given OpenAlex Author ID.
+
+    Args:
+        author_id: The OpenAlex Author ID (e.g., 'https://openalex.org/A5058921480').
+        limit: Maximum number of works to return.
+
+    Returns:
+        dict: Dictionary with a list of works and metadata.
+    """
+
+    # Extract the short author ID (e.g., 'A5058921480')
+    if author_id.startswith("https://openalex.org/"):
+        author_id_short = author_id.split("/")[-1]
+    else:
+        author_id_short = author_id
+
+    try:
+        works_query = pyalex.Works().filter(author={"id": f"https://openalex.org/{author_id_short}"})
+        works = list(works_query.get(per_page=limit))
+        return {
+            "author_id": author_id,
+            "works_count": len(works),
+            "works": works
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving works for author {author_id}: {e}")
+        return {
+            "author_id": author_id,
+            "works_count": 0,
+            "works": [],
+            "error": str(e)
+        }
+
+@mcp.tool(
+    annotations={
+        "title": "Retrieve Author Works",
+        "description": "Given an OpenAlex Author ID, retrieve the list of works (publications) for that author.",
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def retrieve_author_works(
+    author_id: str,
+    limit: int = 20
+) -> dict:
+    """
+    MCP tool wrapper for retrieving works for a given author.
+
+    Args:
+        author_id: The OpenAlex Author ID (e.g., 'https://openalex.org/A5058921480').
+        limit: Maximum number of works to return.
+
+    Returns:
+        dict: Dictionary with a list of works and metadata.
+    """
+    return retrieve_author_works_core(author_id=author_id, limit=limit)
 
 def main():
-    """Entry point for the alex-mcp command."""
+    """
+    Entry point for the alex-mcp server.
+    """
     import asyncio
     logger.info("OpenAlex Author Disambiguation MCP Server starting...")
     asyncio.run(mcp.run())
