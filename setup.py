@@ -23,7 +23,7 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
     ],
-    python_requires=">=3.11",  # Added this since pyalex requires Python 3.8+
+    python_requires=">=3.10",  # Added this since pyalex requires Python 3.8+
     install_requires=[
         "fastmcp>=2.8.1",
         "httpx>=0.28.1",
