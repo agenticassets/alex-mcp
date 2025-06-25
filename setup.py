@@ -29,7 +29,7 @@ setup(
         "httpx>=0.28.1",
         "pydantic>=2.7.2",
         "rich>=13.9.4",
-        "pyalex @ git+https://github.com/J535D165/pyalex.git@v0.18",
+        "pyalex==0.18",
     ],
     entry_points={
         "console_scripts": [
