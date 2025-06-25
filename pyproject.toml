@@ -26,6 +26,7 @@ dependencies = [
     "rich>=13.9.4",
     "pyalex==0.18"
 ]
+requires-python = ">=3.10"
 
 [project.urls]
 Homepage = "https://github.com/drAbreu/alex-mcp"
@@ -38,3 +39,4 @@ alex-mcp = "alex_mcp.server:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["alex_mcp*"]
+
