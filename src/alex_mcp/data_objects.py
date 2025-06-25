@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+
 class AuthorResult(BaseModel):
     """
     Represents a single author as returned by the OpenAlex API.
@@ -46,6 +47,7 @@ class AuthorResult(BaseModel):
     x_concepts: Optional[List[Dict[str, Any]]] = None  # Deprecated, but included for now
     topics: Optional[List[Dict[str, Any]]] = None      # For future compatibility
 
+
 class SearchResponse(BaseModel):
     """
     Represents the response to an author search query.
@@ -60,3 +62,72 @@ class SearchResponse(BaseModel):
     total_count: int
     results: List[AuthorResult]
     search_time: Optional[datetime] = Field(default_factory=datetime.now)
+
+
+class WorkResult(BaseModel):
+    """
+    Represents a single work (publication) as returned by the OpenAlex API.
+
+    Fields:
+        abstract_inverted_index: Inverted index of the abstract.
+        authorships: List of authorship objects.
+        citation_normalized_percentile: Citation percentile.
+        corresponding_author_ids: List of corresponding author OpenAlex IDs.
+        counts_by_year: List of yearly publication/citation counts.
+        doi: DOI of the work.
+        fwci: Field-weighted citation impact.
+        grants: List of grant objects.
+        has_fulltext: Whether the work has full text available.
+        id: OpenAlex unique work ID.
+        ids: Dictionary of external IDs.
+        indexed_in: List of indexes where the work is indexed.
+        is_retracted: Whether the work is retracted.
+        keywords: List of keywords.
+        locations: List of location objects (may contain URLs).
+        open_access: Open access information.
+        primary_topic: Primary topic object.
+        publication_year: Year of publication.
+        referenced_works: List of referenced work IDs.
+        related_works: List of related work IDs.
+        title: Title of the work.
+        type: Type of the work (e.g., journal-article).
+    """
+    abstract_inverted_index: Optional[Dict[str, List[int]]] = None
+    authorships: Optional[List[Dict[str, Any]]] = None
+    citation_normalized_percentile: Optional[Dict[str, Any]] = None
+    corresponding_author_ids: Optional[List[str]] = None
+    counts_by_year: Optional[List[Dict[str, Any]]] = None
+    doi: Optional[str] = None
+    fwci: Optional[float] = None
+    grants: Optional[List[Dict[str, Any]]] = None
+    has_fulltext: Optional[bool] = None
+    id: str
+    ids: Optional[Dict[str, str]] = None
+    indexed_in: Optional[List[str]] = None
+    is_retracted: Optional[bool] = None
+    keywords: Optional[List[Dict[str, Any]]] = None
+    locations: Optional[List[Dict[str, Any]]] = None
+    open_access: Optional[Dict[str, Any]] = None
+    primary_topic: Optional[Dict[str, Any]] = None
+    publication_year: Optional[int] = None
+    referenced_works: Optional[List[str]] = None
+    related_works: Optional[List[str]] = None
+    title: Optional[str] = None
+    type: Optional[str] = None
+
+class WorksSearchResponse(BaseModel):
+    """
+    Represents the response to a works search query.
+
+    Fields:
+        author_id: The OpenAlex Author ID used for the search.
+        total_count: Number of works found matching the query.
+        results: List of WorkResult objects.
+        search_time: Timestamp when the search was performed.
+        filters: Dictionary of filters applied to the search.
+    """
+    author_id: str
+    total_count: int
+    results: List[WorkResult]
+    search_time: Optional[datetime] = Field(default_factory=datetime.now)
+    filters: Optional[Dict[str, Any]] = None
