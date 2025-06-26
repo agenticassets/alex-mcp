@@ -25,8 +25,37 @@ from alex_mcp.data_objects import (
     WorkResult
 )
 import pyalex
+import os
 
+import sys
 
+def get_config():
+    mailto = os.environ.get("OPENALEX_MAILTO")
+    if not mailto:
+        print(
+            "ERROR: The environment variable OPENALEX_MAILTO must be set to your email address "
+            "to use the OpenAlex MCP server. Example: export OPENALEX_MAILTO='your-email@example.com'",
+            file=sys.stderr
+        )
+        sys.exit(1)
+    return {
+        "OPENALEX_MAILTO": mailto,
+        "OPENALEX_USER_AGENT": os.environ.get(
+            "OPENALEX_USER_AGENT",
+            f"alex-mcp (+{mailto})"
+        ),
+        "OPENALEX_MAX_AUTHORS": int(os.environ.get("OPENALEX_MAX_AUTHORS", 100)),
+        "OPENALEX_RATE_PER_SEC": int(os.environ.get("OPENALEX_RATE_PER_SEC", 10)),
+        "OPENALEX_RATE_PER_DAY": int(os.environ.get("OPENALEX_RATE_PER_DAY", 100000)),
+        "OPENALEX_USE_DAILY_API": os.environ.get("OPENALEX_USE_DAILY_API", "true").lower() == "true",
+        "OPENALEX_SNAPSHOT_INTERVAL_DAYS": int(os.environ.get("OPENALEX_SNAPSHOT_INTERVAL_DAYS", 30)),
+        "OPENALEX_PREMIUM_UPDATES": os.environ.get("OPENALEX_PREMIUM_UPDATES", "hourly"),
+        "OPENALEX_RETRACTION_BUG_START": os.environ.get("OPENALEX_RETRACTION_BUG_START", "2023-12-22"),
+        "OPENALEX_RETRACTION_BUG_END": os.environ.get("OPENALEX_RETRACTION_BUG_END", "2024-03-19"),
+        "OPENALEX_NO_FUNDING_DATA": os.environ.get("OPENALEX_NO_FUNDING_DATA", "true").lower() == "true",
+        "OPENALEX_MISSING_CORRESPONDING_AUTHORS": os.environ.get("OPENALEX_MISSING_CORRESPONDING_AUTHORS", "true").lower() == "true",
+        "OPENALEX_PARTIAL_ABSTRACTS": os.environ.get("OPENALEX_PARTIAL_ABSTRACTS", "true").lower() == "true",
+    }
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,8 +74,9 @@ def configure_pyalex(email: str):
     pyalex.config.email = email
 
 # Example: load from environment or config file in production
-configure_pyalex("jorge.abreu@embo.org")
-
+config = get_config()
+configure_pyalex(config["OPENALEX_MAILTO"])
+pyalex.config.user_agent = config["OPENALEX_USER_AGENT"]
 
 def search_authors_core(
     name: str,
