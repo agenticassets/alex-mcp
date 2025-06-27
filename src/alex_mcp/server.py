@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Optimized OpenAlex Author Disambiguation MCP Server
+Optimized OpenAlex Author Disambiguation MCP Server with Peer-Review Filtering
 
 Provides a FastMCP-compliant API for author disambiguation and institution resolution
 using the OpenAlex API with streamlined output to minimize token usage.
@@ -8,6 +8,7 @@ using the OpenAlex API with streamlined output to minimize token usage.
 Key optimizations:
 - Simplified author objects (~70% token reduction)
 - Streamlined work objects (~80% token reduction)
+- Robust peer-review filtering (excludes data catalogs, preprints, etc.)
 - Focused on essential disambiguation and retrieval information
 - Maintains full functionality with minimal data
 
@@ -16,6 +17,7 @@ Features:
 - Institution name resolution (simplified to strings)
 - ORCID integration
 - Key publication and citation metrics
+- Comprehensive peer-review filtering
 - Full MCP protocol compliance
 
 See https://docs.openalex.org/api-entities/authors/author-object for the full Author object specification.
@@ -87,6 +89,193 @@ configure_pyalex(config["OPENALEX_MAILTO"])
 pyalex.config.user_agent = config["OPENALEX_USER_AGENT"]
 
 
+def is_peer_reviewed_journal(work_data) -> bool:
+    """
+    Improved filter to determine if a work is from a peer-reviewed journal.
+    
+    Uses a balanced approach that catches data catalogs and preprints while
+    not being overly strict about DOIs (some legitimate papers lack them in OpenAlex).
+    
+    Args:
+        work_data: OpenAlex work object
+        
+    Returns:
+        bool: True if the work appears to be from a peer-reviewed journal
+    """
+    try:
+        title = work_data.get('title', '').lower()
+        
+        # Quick exclusions based on title patterns
+        title_exclusions = [
+            'vizier online data catalog',
+            'online data catalog',
+            'data catalog',
+            'catalog:',
+            'database:',
+            'repository:',
+            'preprint',
+            'arxiv:',
+            'biorxiv',
+            'medrxiv',
+        ]
+        
+        for exclusion in title_exclusions:
+            if exclusion in title:
+                logger.debug(f"Excluding based on title pattern '{exclusion}': {title[:100]}")
+                return False
+        
+        # Check primary location
+        primary_location = work_data.get('primary_location')
+        if not primary_location:
+            logger.debug("Excluding work without primary location")
+            return False
+        
+        # Check source information
+        source = primary_location.get('source', {})
+        if not source:
+            logger.debug("Excluding work without source")
+            return False
+        
+        # Get journal/source information
+        journal_name = source.get('display_name', '').lower()
+        publisher = work_data.get('publisher', '')
+        doi = work_data.get('doi')
+        issn_l = source.get('issn_l')
+        issn = source.get('issn')
+        source_type = source.get('type', '').lower()
+        
+        # CRITICAL: Exclude known data catalogs by journal name
+        excluded_journals = [
+            'vizier online data catalog',
+            'ycat',
+            'catalog',
+            'database',
+            'repository',
+            'arxiv',
+            'biorxiv',
+            'medrxiv',
+            'ssrn',
+            'research square',
+            'zenodo',
+            'figshare',
+            'dryad',
+            'github',
+            'protocols.io',
+            'ceur',
+            'conference proceedings',
+            'workshop proceedings',
+        ]
+        
+        for excluded in excluded_journals:
+            if excluded in journal_name:
+                logger.debug(f"Excluding journal pattern '{excluded}': {journal_name}")
+                return False
+        
+        # CRITICAL: Data catalogs typically have no publisher AND no DOI
+        # This catches VizieR entries effectively
+        if not publisher and not doi:
+            logger.debug(f"Excluding work without publisher AND DOI: {title[:100]}")
+            return False
+        
+        # Source type should be journal (if specified)
+        if source_type and source_type not in ['journal', '']:
+            logger.debug(f"Excluding non-journal source type: {source_type}")
+            return False
+        
+        # Work type should be article or letter
+        work_type = work_data.get('type', '').lower()
+        if work_type not in ['article', 'letter']:
+            logger.debug(f"Excluding work type: {work_type}")
+            return False
+        
+        # Should have reasonable publication year
+        pub_year = work_data.get('publication_year')
+        if not pub_year or pub_year < 1900 or pub_year > 2030:
+            logger.debug(f"Excluding work with invalid publication year: {pub_year}")
+            return False
+        
+        # For papers claiming to be from legitimate journals, check quality signals
+        known_legitimate_journals = [
+            'nature',
+            'science',
+            'cell',
+            'astrophysical journal',
+            'astronomy and astrophysics',
+            'monthly notices',
+            'physical review',
+            'journal of',
+            'proceedings of',
+        ]
+        
+        is_known_journal = any(known in journal_name for known in known_legitimate_journals)
+        
+        if is_known_journal:
+            # For known journals, be more lenient (don't require DOI)
+            # But still require either publisher or ISSN
+            if not publisher and not issn_l and not issn:
+                logger.debug(f"Excluding known journal without publisher/ISSN: {journal_name}")
+                return False
+        else:
+            # For unknown journals, require more quality signals
+            quality_signals = sum([
+                bool(doi),          # Has DOI
+                bool(publisher),    # Has publisher  
+                bool(issn_l or issn),  # Has ISSN
+                bool(journal_name and len(journal_name) > 5),  # Reasonable journal name
+            ])
+            
+            if quality_signals < 2:  # Require at least 2 quality signals
+                logger.debug(f"Excluding unknown journal with insufficient quality signals ({quality_signals}/4): {journal_name}")
+                return False
+        
+        # Additional quality checks
+        if 'cited_by_count' not in work_data:
+            logger.debug("Excluding work without citation data")
+            return False
+        
+        # Very long titles might be data descriptions
+        if len(title) > 250:
+            logger.debug(f"Excluding work with very long title: {title[:100]}...")
+            return False
+        
+        # If we get here, it passes all checks
+        logger.debug(f"ACCEPTED: {title[:100]}")
+        return True
+        
+    except Exception as e:
+        logger.warning(f"Error in peer review check: {e}")
+        return False
+
+
+def filter_peer_reviewed_works(works: list) -> list:
+    """
+    Apply peer-review filtering to a list of works.
+    
+    Args:
+        works: List of OpenAlex work objects
+        
+    Returns:
+        list: Filtered list containing only peer-reviewed journal works
+    """
+    filtered_works = []
+    excluded_count = 0
+    
+    logger.info(f"Starting filtering of {len(works)} works...")
+    
+    for i, work in enumerate(works):
+        title = work.get('title', 'Unknown')[:60]
+        
+        if is_peer_reviewed_journal(work):
+            filtered_works.append(work)
+            logger.debug(f"✓ KEPT work {i+1}: {title}")
+        else:
+            excluded_count += 1
+            logger.debug(f"✗ EXCLUDED work {i+1}: {title}")
+    
+    logger.info(f"Filtering complete: {len(filtered_works)} kept, {excluded_count} excluded from {len(works)} total")
+    return filtered_works
+
+
 def search_authors_core(
     name: str,
     institution: Optional[str] = None,
@@ -156,6 +345,130 @@ def search_authors_core(
         )
 
 
+def retrieve_author_works_core(
+    author_id: str,
+    limit: int = 10,  # Reduced default limit
+    order_by: str = "date",  # "date" or "citations"
+    publication_year: Optional[int] = None,
+    type: Optional[str] = None,
+    journal_only: bool = True,  # Default to True for peer-reviewed content
+    min_citations: Optional[int] = None,
+    peer_reviewed_only: bool = True,  # Default to True
+) -> OptimizedWorksSearchResponse:
+    """
+    Enhanced core logic to retrieve peer-reviewed works for a given OpenAlex Author ID.
+    Returns streamlined work data to minimize token usage and ensures only legitimate
+    peer-reviewed journal articles and letters.
+
+    Args:
+        author_id: OpenAlex Author ID
+        limit: Maximum number of results (default: 10, max: 20)
+        order_by: Sort order - "date" or "citations"
+        publication_year: Filter by specific year
+        type: Filter by work type (e.g., "journal-article")
+        journal_only: If True, only return journal articles and letters
+        min_citations: Minimum citation count filter
+        peer_reviewed_only: If True, apply comprehensive peer-review filters
+
+    Returns:
+        OptimizedWorksSearchResponse: Streamlined response with peer-reviewed work data.
+    """
+    try:
+        # Ensure reasonable limits
+        limit = min(limit, 20)
+        
+        # Build base filters
+        filters = {"author.id": author_id}
+        
+        # Add optional filters
+        if publication_year:
+            filters["publication_year"] = publication_year
+        if type:
+            filters["type"] = type
+        elif journal_only:
+            # Focus on journal articles and letters for academic work
+            filters["type"] = "article|letter"
+        if min_citations:
+            filters["cited_by_count"] = f">={min_citations}"
+        
+        # Add some basic API-level filters (but not too restrictive)
+        if peer_reviewed_only or journal_only:
+            # Only exclude obviously retracted papers at API level
+            filters["is_retracted"] = "false"
+        
+        # Convert author_id to proper format if needed
+        if author_id.startswith("https://openalex.org/"):
+            author_id_short = author_id.split("/")[-1]
+            filters["author.id"] = f"https://openalex.org/{author_id_short}"
+
+        # Build query - get more results for post-filtering if needed
+        if peer_reviewed_only:
+            initial_limit = min(limit * 4, 80)  # Get 4x more for filtering
+        else:
+            initial_limit = limit
+            
+        works_query = pyalex.Works().filter(**filters)
+        
+        # Apply sorting
+        if order_by == "citations":
+            works_query = works_query.sort(cited_by_count="desc")
+        else:
+            works_query = works_query.sort(publication_date="desc")
+        
+        # Execute query
+        logger.info(f"Querying OpenAlex for {initial_limit} works with filters: {filters}")
+        works = list(works_query.get(per_page=initial_limit))
+        logger.info(f"Retrieved {len(works)} works from OpenAlex")
+        
+        # Apply peer-review filtering if requested
+        if peer_reviewed_only:
+            logger.info("Applying peer-review filtering...")
+            works = filter_peer_reviewed_works(works)
+            logger.info(f"After filtering: {len(works)} works remain")
+        
+        # Limit to requested number after filtering
+        works = works[:limit]
+        
+        # Get author name for response (if available from first work)
+        author_name = None
+        if works:
+            authorships = works[0].get('authorships', [])
+            for authorship in authorships:
+                author = authorship.get('author', {})
+                if author.get('id') == author_id:
+                    author_name = author.get('display_name')
+                    break
+        
+        # Convert to optimized format
+        optimized_works = []
+        for work_data in works:
+            try:
+                optimized_work = optimize_work_data(work_data)
+                optimized_works.append(optimized_work)
+            except Exception as e:
+                logger.warning(f"Error optimizing work data: {e}")
+                continue
+        
+        logger.info(f"Final result: {len(optimized_works)} works for author: {author_id}")
+        
+        return OptimizedWorksSearchResponse(
+            author_id=author_id,
+            author_name=author_name,
+            total_count=len(optimized_works),
+            results=optimized_works,
+            filters=filters
+        )
+        
+    except Exception as e:
+        logger.error(f"Error retrieving works for author {author_id}: {e}")
+        return OptimizedWorksSearchResponse(
+            author_id=author_id,
+            total_count=0,
+            results=[],
+            filters={}
+        )
+
+
 @mcp.tool(
     annotations={
         "title": "Search Authors (Optimized)",
@@ -201,113 +514,14 @@ async def search_authors(
     return response.dict()
 
 
-def retrieve_author_works_core(
-    author_id: str,
-    limit: int = 10,  # Reduced default limit
-    order_by: str = "date",  # "date" or "citations"
-    publication_year: Optional[int] = None,
-    type: Optional[str] = None,
-    journal_only: bool = False,  # New filter for journal articles only
-    min_citations: Optional[int] = None,  # New filter for minimum citations
-) -> OptimizedWorksSearchResponse:
-    """
-    Optimized core logic to retrieve works for a given OpenAlex Author ID.
-    Returns streamlined work data to minimize token usage.
-
-    Args:
-        author_id: OpenAlex Author ID
-        limit: Maximum number of results (default: 10, max: 20)
-        order_by: Sort order - "date" or "citations"
-        publication_year: Filter by specific year
-        type: Filter by work type (e.g., "journal-article")
-        journal_only: If True, only return journal articles and letters
-        min_citations: Minimum citation count filter
-
-    Returns:
-        OptimizedWorksSearchResponse: Streamlined response with essential work data.
-    """
-    try:
-        # Ensure reasonable limits
-        limit = min(limit, 20)
-        
-        # Build filters
-        filters = {"author.id": author_id}
-        
-        if publication_year:
-            filters["publication_year"] = publication_year
-        if type:
-            filters["type"] = type
-        elif journal_only:
-            # Focus on journal articles and letters for academic work
-            filters["type"] = "journal-article|letter"
-        if min_citations:
-            filters["cited_by_count"] = f">={min_citations}"
-        
-        # Convert author_id to proper format if needed
-        if author_id.startswith("https://openalex.org/"):
-            author_id_short = author_id.split("/")[-1]
-            filters["author.id"] = f"https://openalex.org/{author_id_short}"
-
-        # Build query
-        works_query = pyalex.Works().filter(**filters)
-        
-        # Apply sorting
-        if order_by == "citations":
-            works_query = works_query.sort(cited_by_count="desc")
-        else:
-            works_query = works_query.sort(updated_date="desc")
-        
-        # Execute query
-        works = list(works_query.get(per_page=limit))
-        
-        # Get author name for response (if available from first work)
-        author_name = None
-        if works:
-            authorships = works[0].get('authorships', [])
-            for authorship in authorships:
-                author = authorship.get('author', {})
-                if author.get('id') == author_id:
-                    author_name = author.get('display_name')
-                    break
-        
-        # Convert to optimized format
-        optimized_works = []
-        for work_data in works:
-            try:
-                optimized_work = optimize_work_data(work_data)
-                optimized_works.append(optimized_work)
-            except Exception as e:
-                logger.warning(f"Error optimizing work data: {e}")
-                continue
-        
-        logger.info(f"Found {len(optimized_works)} works for author: {author_id}")
-        
-        return OptimizedWorksSearchResponse(
-            author_id=author_id,
-            author_name=author_name,
-            total_count=len(optimized_works),
-            results=optimized_works,
-            filters=filters
-        )
-        
-    except Exception as e:
-        logger.error(f"Error retrieving works for author {author_id}: {e}")
-        return OptimizedWorksSearchResponse(
-            author_id=author_id,
-            total_count=0,
-            results=[],
-            filters={}
-        )
-
-
 @mcp.tool(
     annotations={
-        "title": "Retrieve Author Works (Optimized)",
+        "title": "Retrieve Author Works (Peer-Reviewed Only)",
         "description": (
-            "Retrieve works (publications) for a given OpenAlex Author ID. "
+            "Retrieve peer-reviewed journal works for a given OpenAlex Author ID. "
+            "Automatically filters out data catalogs, preprint servers, and non-journal content. "
             "Returns streamlined work data optimized for AI agents with ~80% fewer tokens. "
-            "Includes essential info: title, DOI, year, journal, citations, and type. "
-            "Supports filtering by year, type, and citation count."
+            "Uses balanced filtering: excludes VizieR catalogs but allows legitimate papers without DOIs."
         ),
         "readOnlyHint": True,
         "openWorldHint": True
@@ -319,23 +533,25 @@ async def retrieve_author_works(
     order_by: str = "date",
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
-    journal_only: bool = False,
+    journal_only: bool = True,
     min_citations: Optional[int] = None,
+    peer_reviewed_only: bool = True,
 ) -> dict:
     """
-    Optimized MCP tool wrapper for retrieving works for a given author.
+    Enhanced MCP tool wrapper for retrieving peer-reviewed journal works.
 
     Args:
         author_id: OpenAlex Author ID (e.g., 'https://openalex.org/A123456789')
         limit: Maximum number of results (default: 10, max: 20)
         order_by: Sort order - "date" for newest first, "citations" for most cited first
         publication_year: Filter by specific publication year
-        type: Filter by work type (e.g., "journal-article", "book-chapter")
-        journal_only: If True, only return journal articles and letters
+        type: Filter by work type (e.g., "journal-article", "letter")
+        journal_only: If True, only return journal articles and letters (default: True)
         min_citations: Only return works with at least this many citations
+        peer_reviewed_only: If True, apply balanced peer-review filters (default: True)
 
     Returns:
-        dict: Serialized OptimizedWorksSearchResponse with streamlined work data.
+        dict: Serialized OptimizedWorksSearchResponse with peer-reviewed journal works only.
     """
     # Ensure reasonable limits to control token usage
     limit = min(limit, 20)
@@ -348,17 +564,19 @@ async def retrieve_author_works(
         type=type,
         journal_only=journal_only,
         min_citations=min_citations,
+        peer_reviewed_only=peer_reviewed_only,
     )
     return response.dict()
 
 
 def main():
     """
-    Entry point for the optimized alex-mcp server.
+    Entry point for the enhanced alex-mcp server with balanced peer-review filtering.
     """
     import asyncio
-    logger.info("Optimized OpenAlex Author Disambiguation MCP Server starting...")
+    logger.info("Enhanced OpenAlex Author Disambiguation MCP Server starting...")
     logger.info("Features: ~70% token reduction for authors, ~80% for works")
+    logger.info("Balanced peer-review filtering: excludes data catalogs while preserving legitimate papers")
     asyncio.run(mcp.run())
 
 
