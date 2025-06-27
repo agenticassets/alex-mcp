@@ -7,33 +7,39 @@
   [![Python](https://img.shields.io/badge/Python-3.10+-green)](https://python.org)
   [![OpenAlex](https://img.shields.io/badge/OpenAlex-API-orange)](https://openalex.org)
   [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-  [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-brightgreen)](https://your-docs-or-marketplace-link)
+  [![Optimized](https://img.shields.io/badge/AI%20Agent-Optimized-brightgreen)](https://github.com/drAbreu/alex-mcp)
 </div>
 
-A professional Model Context Protocol (MCP) server for author disambiguation and institution resolution using the OpenAlex.org API. Built following MCP best practices with FastMCP for clean, maintainable code.
+A **streamlined** Model Context Protocol (MCP) server for author disambiguation and academic research using the OpenAlex.org API. Specifically designed for AI agents with optimized data structures and enhanced functionality.
 
 ---
 
-## 🎯 Features
+## 🎯 Key Features
 
-### 🔍 Core Capabilities
-- **ML-Powered Author Disambiguation**: Leverage OpenAlex's advanced machine learning models.
-- **Institution Resolution**: Automatic abbreviation expansion (e.g., MIT → Massachusetts Institute of Technology).
-- **ORCID Integration**: Highest accuracy matching with ORCID identifiers.
-- **Confidence Scoring**: Detailed confidence analysis with match reasoning.
-- **Career Analysis**: Automatic career stage determination and metrics.
+### 🔍 **Core Capabilities**
+- **Advanced Author Disambiguation**: Handles complex career transitions and name variations
+- **Institution Resolution**: Current and past affiliations with transition tracking
+- **Academic Work Retrieval**: Journal articles, letters, and research papers
+- **Citation Analysis**: H-index, citation counts, and impact metrics
+- **ORCID Integration**: Highest accuracy matching with ORCID identifiers
 
-### 🤖 Agent Optimized
-- **Multiple Candidates**: Return ranked candidates for automated decision-making.
-- **Rich Metadata**: Comprehensive author profiles with metrics and affiliations.
-- **Structured Responses**: Clean, parseable output for automated systems.
-- **Error Handling**: Graceful error handling with informative messages.
+### 🚀 **AI Agent Optimized**
+- **Streamlined Data**: Focused on essential information for disambiguation
+- **Fast Processing**: Optimized data structures for rapid analysis
+- **Smart Filtering**: Enhanced filtering options for targeted queries
+- **Clean Output**: Structured responses optimized for AI reasoning
 
-### 🏛️ Professional Grade
-- **MCP Best Practices**: Built with FastMCP following official guidelines.
-- **Tool Annotations**: Proper MCP tool annotations for optimal client integration.
-- **Resource Management**: Efficient HTTP client management and cleanup.
-- **Rate Limiting**: Respectful API usage with proper delays.
+### 🤖 **Agent Integration**
+- **Multiple Candidates**: Ranked results for automated decision-making
+- **Structured Responses**: Clean, parseable output optimized for LLMs
+- **Error Handling**: Graceful degradation with informative messages
+- **Enhanced Filtering**: Journal-only, citation thresholds, and temporal filters
+
+### 🏛️ **Professional Grade**
+- **MCP Best Practices**: Built with FastMCP following official guidelines
+- **Tool Annotations**: Proper MCP tool annotations for optimal client integration
+- **Resource Management**: Efficient HTTP client management and cleanup
+- **Rate Limiting**: Respectful API usage with proper delays
 
 ---
 
@@ -43,6 +49,7 @@ A professional Model Context Protocol (MCP) server for author disambiguation and
 
 - Python 3.10 or higher
 - MCP-compatible client (e.g., Claude Desktop)
+- Email address (for OpenAlex API courtesy)
 
 ### Installation
 
@@ -65,9 +72,16 @@ For detailed installation instructions, see [INSTALL.md](INSTALL.md).
    pip install -e .
    ```
 
-4. **Run the server:**
+4. **Configure environment:**
+   ```bash
+   export OPENALEX_MAILTO=your-email@domain.com
+   ```
+
+5. **Run the server:**
    ```bash
    ./run_alex_mcp.sh
+   # Or, if installed as a CLI tool:
+   alex-mcp
    ```
 
 ---
@@ -82,7 +96,10 @@ Add to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "alex-mcp": {
-      "command": "/path/to/alex-mcp/run_alex_mcp.sh"
+      "command": "/path/to/alex-mcp/run_alex_mcp.sh",
+      "env": {
+        "OPENALEX_MAILTO": "your-email@domain.com"
+      }
     }
   }
 }
@@ -90,14 +107,13 @@ Add to your Claude Desktop configuration file:
 
 Replace `/path/to/alex-mcp` with the actual path to the repository on your system.
 
-
 ---
 
-## 🤖 Using with OpenAI Agents
+## 🤖 Using with AI Agents
 
-You can load this MCP server in your OpenAI agent workflow using the [`agents.mcp.MCPServerStdio`](https://github.com/openai/openai-agents) interface. This allows you to launch and interact with the server programmatically.
+### OpenAI Agents Integration
 
-### Example: Loading with `MCPServerStdio`
+You can load this MCP server in your OpenAI agent workflow using the [`agents.mcp.MCPServerStdio`](https://github.com/openai/openai-agents) interface:
 
 ```python
 from agents.mcp import MCPServerStdio
@@ -108,136 +124,444 @@ async with MCPServerStdio(
     params={
         "command": "uvx",
         "args": [
-            "--from", "git+https://github.com/drAbreu/alex-mcp.git@4.0.0",
+            "--from", "git+https://github.com/drAbreu/alex-mcp.git@4.1.0",
             "alex-mcp"
         ],
         "env": {
-            "OPENALEX_MAILTO": "you@email.com"
-        }  # Set your OpenAlex API email here!
+            "OPENALEX_MAILTO": "your-email@domain.com"
+        }
     },
     client_session_timeout_seconds=10
 ) as alex_mcp:
     await alex_mcp.connect()
-    # Now you can call tools via alex_mcp
-
+    tools = await alex_mcp.list_tools()
+    print(f"Available tools: {[tool.name for tool in tools]}")
 ```
 
-> **Note:**  
-> The `OPENALEX_MAILTO` environment variable is required for OpenAlex API access.  
-> Replace with your own email address.
+### Academic Research Agent Integration
 
----
+This MCP server is specifically optimized for academic research workflows:
 
-### Example: Loading Directly with `uvx`
+```python
+# Optimized for academic research workflows
+from alex_agent import run_author_research
 
-You can also launch the MCP server directly using [`uvx`](https://github.com/openai/uvx):
+# Enhanced functionality with streamlined data
+result = await run_author_research(
+    "Find J. Abreu at EMBO with recent publications"
+)
+
+# Clean, structured output for AI processing
+print(f"Success: {result['workflow_metadata']['success']}")
+print(f"Quality: {result['research_result']['metadata']['result_analysis']['quality_score']}/100")
+```
+
+### Direct Launch with uvx
 
 ```bash
-uvx --from git+https://github.com/drAbreu/alex-mcp.git@4.0.0 alex-mcp
+# Standard launch
+uvx --from git+https://github.com/drAbreu/alex-mcp.git@4.1.0 alex-mcp
+
+# With environment variables
+OPENALEX_MAILTO=your-email@domain.com uvx --from git+https://github.com/drAbreu/alex-mcp.git@4.1.0 alex-mcp
 ```
-
-You can pass environment variables as needed:
-
-```bash
-OPENALEX_MAILTO=you@email.com uvx --from git+https://github.com/drAbreu/alex-mcp.git@4.0.0 alex-mcp
-```
-
 
 ---
 
 ## 🛠️ Available Tools
 
-### 1. **disambiguate_author**
-Disambiguate an author using OpenAlex's ML-powered system.
-
-**Parameters:**
-- `name` (required): Author name
-- `affiliation` (optional): Institution name for improved accuracy
-- `research_field` (optional): Research field or topic
-- `orcid` (optional): ORCID identifier for highest confidence
-- `max_candidates` (optional): Maximum candidates to return (1-25, default: 5)
-
-**Returns:**  
-A ranked list of candidate authors with confidence scores and detailed metadata.
-
----
-
-### 2. **search_authors**
-Search for authors with advanced filtering.
+### 1. **search_authors**
+Search for authors with streamlined output for AI agents.
 
 **Parameters:**
 - `name` (required): Author name to search
-- `affiliation` (optional): Filter by institution
-- `research_field` (optional): Filter by research field
-- `limit` (optional): Maximum results (1-25, default: 10)
+- `institution` (optional): Institution name filter
+- `topic` (optional): Research topic filter
+- `country_code` (optional): Country code filter (e.g., "US", "DE")
+- `limit` (optional): Maximum results (1-25, default: 20)
 
-**Returns:**  
-A list of authors matching the query, including OpenAlex IDs, affiliations, and metrics.
+**Streamlined Output:**
+```json
+{
+  "query": "J. Abreu",
+  "total_count": 3,
+  "results": [
+    {
+      "id": "https://openalex.org/A123456789",
+      "display_name": "Jorge Abreu-Vicente",
+      "orcid": "https://orcid.org/0000-0000-0000-0000",
+      "display_name_alternatives": ["J. Abreu-Vicente", "Jorge Abreu Vicente"],
+      "affiliations": [
+        {
+          "institution": {
+            "display_name": "European Molecular Biology Organization",
+            "country_code": "DE"
+          },
+          "years": [2023, 2024, 2025]
+        }
+      ],
+      "cited_by_count": 316,
+      "works_count": 25,
+      "summary_stats": {
+        "h_index": 9,
+        "i10_index": 5
+      },
+      "x_concepts": [
+        {
+          "display_name": "Astrophysics",
+          "score": 0.8
+        },
+        {
+          "display_name": "Machine Learning", 
+          "score": 0.6
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Features**: Clean structure optimized for AI reasoning and disambiguation
 
 ---
 
-### 3. **get_author_profile**
-Get detailed author profile by OpenAlex ID, including recent articles.
+### 2. **retrieve_author_works**
+Retrieve works for a given author with enhanced filtering capabilities.
 
 **Parameters:**
-- `openalex_id` (required): OpenAlex author ID
-- `max_works` (optional): Maximum number of recent articles to include (default: 10)
+- `author_id` (required): OpenAlex author ID
+- `limit` (optional): Maximum results (1-50, default: 20)
+- `order_by` (optional): "date" or "citations" (default: "date")
+- `publication_year` (optional): Filter by specific year
+- `type` (optional): Work type filter (e.g., "journal-article")
+- `authorships_institutions_id` (optional): Filter by institution
+- `is_retracted` (optional): Filter retracted works
+- `open_access_is_oa` (optional): Filter by open access status
 
-**Returns:**  
-A detailed author profile with works, metrics, and affiliations.
+**Enhanced Output:**
+```json
+{
+  "author_id": "https://openalex.org/A123456789",
+  "total_count": 25,
+  "results": [
+    {
+      "id": "https://openalex.org/W123456789",
+      "title": "A platform for the biomedical application of large language models",
+      "doi": "10.1038/s41587-024-02534-3",
+      "publication_year": 2025,
+      "type": "journal-article",
+      "cited_by_count": 42,
+      "authorships": [
+        {
+          "author": {
+            "display_name": "Jorge Abreu-Vicente"
+          },
+          "institutions": [
+            {
+              "display_name": "European Molecular Biology Organization"
+            }
+          ]
+        }
+      ],
+      "locations": [
+        {
+          "source": {
+            "display_name": "Nature Biotechnology",
+            "type": "journal"
+          }
+        }
+      ],
+      "open_access": {
+        "is_oa": true
+      },
+      "primary_topic": {
+        "display_name": "Biomedical Engineering"
+      }
+    }
+  ]
+}
+```
+
+**Features**: Comprehensive work data with flexible filtering for targeted queries
 
 ---
 
-### 4. **resolve_institution**
-Resolve institution names and abbreviations.
+## 📊 Data Optimization
 
-**Parameters:**
-- `institution_query` (required): Institution name or abbreviation
+### Focused Information Architecture
+This MCP server provides focused, structured data specifically designed for AI agent consumption:
 
-**Returns:**  
-The resolved institution name, OpenAlex ID, and related metadata.
+### Author Data Features
+- **Identity Resolution**: Names, ORCID, alternatives for disambiguation
+- **Affiliation Tracking**: Current and historical institutional connections
+- **Impact Metrics**: Citation counts, h-index, and scholarly impact
+- **Research Context**: Fields, concepts, and domain expertise
+- **Career Analysis**: Temporal affiliation changes and transitions
+
+### Work Data Features
+- **Publication Metadata**: Title, DOI, venue, and publication details
+- **Impact Assessment**: Citation counts and scholarly influence
+- **Access Information**: Open access status and availability
+- **Authorship Details**: Complete author lists and institutional affiliations
+- **Research Classification**: Topics, concepts, and domain categorization
+
+### Enhanced Filtering
+
+```python
+# Target high-impact journal articles
+works = await retrieve_author_works(
+    author_id="https://openalex.org/A123456789",
+    type="journal-article",      # Focus on journal publications
+    open_access_is_oa=True,      # Open access only
+    order_by="citations",        # Most cited first
+    limit=15
+)
+
+# Career transition analysis
+authors = await search_authors(
+    name="J. Abreu",
+    institution="EMBO",          # Current institution
+    topic="Machine Learning",    # Research focus
+    limit=10
+)
+```
 
 ---
 
 ## 🧪 Example Usage
 
-### Disambiguate an Author
+### Author Disambiguation
 
 ```python
-from src.alex_mcp.server import search_authors_core
+from alex_mcp.server import search_authors_core
 
+# Comprehensive author search
 results = search_authors_core(
-    "J Abreu Vicente",
-    institution=None,
-    topic="Astronomy and Astrophysics",
-    country_code=None,
+    name="J Abreu Vicente",
+    institution="EMBO",
+    topic="Machine Learning",
     limit=20
 )
-print(results)
+
+print(f"Found {results.total_count} candidates")
+for author in results.results:
+    print(f"- {author.display_name}")
+    if author.affiliations:
+        current_inst = author.affiliations[0].institution.display_name
+        print(f"  Institution: {current_inst}")
+    print(f"  Metrics: {author.cited_by_count} citations, h-index {author.summary_stats.h_index}")
+    if author.x_concepts:
+        fields = [c.display_name for c in author.x_concepts[:3]]
+        print(f"  Research: {', '.join(fields)}")
 ```
 
-### Retrieve Author Works
+### Academic Work Analysis
 
 ```python
-from src.alex_mcp.server import retrieve_author_works_core
+from alex_mcp.server import retrieve_author_works_core
 
+# Comprehensive work retrieval
 works = retrieve_author_works_core(
     author_id="https://openalex.org/A5058921480",
+    type="journal-article",      # Academic focus
+    order_by="citations",        # Impact-based ordering
     limit=20
 )
-print(works)
+
+print(f"Found {works.total_count} publications")
+for work in works.results:
+    print(f"- {work.title}")
+    if work.locations:
+        journal = work.locations[0].source.display_name
+        print(f"  Published in: {journal} ({work.publication_year})")
+    print(f"  Impact: {work.cited_by_count} citations")
+    if work.open_access and work.open_access.is_oa:
+        print("  ✓ Open Access")
+```
+
+### Institution and Field Analysis
+
+```python
+# Analyze career transitions
+def analyze_career_path(author_result):
+    affiliations = author_result.affiliations
+    if len(affiliations) > 1:
+        print("Career path:")
+        for aff in sorted(affiliations, key=lambda x: min(x.years)):
+            years = f"{min(aff.years)}-{max(aff.years)}"
+            print(f"  {years}: {aff.institution.display_name}")
+    
+    # Research evolution
+    if author_result.x_concepts:
+        print("Research areas:")
+        for concept in author_result.x_concepts[:5]:
+            print(f"  {concept.display_name} (score: {concept.score:.2f})")
+
+# Usage
+results = search_authors_core("Jorge Abreu Vicente")
+if results.results:
+    analyze_career_path(results.results[0])
+```
+
+---
+
+## 🔧 Configuration Options
+
+### Environment Variables
+
+```bash
+# Required
+export OPENALEX_MAILTO=your-email@domain.com
+
+# Optional settings
+export OPENALEX_MAX_AUTHORS=100             # Maximum authors per query
+export OPENALEX_USER_AGENT=research-agent-v1.0
+export ALEX_MCP_VERSION=4.1.0
+
+# Rate limiting (respectful usage)
+export OPENALEX_RATE_PER_SEC=10
+export OPENALEX_RATE_PER_DAY=100000
+```
+
+### Performance Tuning
+
+```python
+# For comprehensive research applications
+config = {
+    "max_authors_per_query": 25,     # Detailed author analysis
+    "max_works_per_author": 50,      # Complete publication history
+    "enable_all_filters": True,      # Full filtering capabilities
+    "detailed_affiliations": True,   # Complete institutional data
+    "research_concepts": True        # Detailed concept analysis
+}
 ```
 
 ---
 
 ## 🧑‍💻 Development & Testing
 
-- All source code is in `src/alex_mcp/`.
-- Example notebooks and test scripts are in the `examples/` directory.
-- To run tests:
-  ```bash
-  pytest examples/
-  ```
+### Project Structure
+```
+alex-mcp/
+├── src/alex_mcp/
+│   ├── server.py              # Main MCP server
+│   ├── data_objects.py        # Data models and structures
+│   └── utils.py               # Utility functions
+├── examples/
+│   ├── basic_usage.py         # Simple examples
+│   ├── advanced_queries.py    # Complex query examples
+│   └── integration_demo.py    # AI agent integration
+├── tests/
+│   ├── test_server.py         # Server functionality tests
+│   └── test_integration.py    # Integration tests
+└── docs/
+    └── api_reference.md       # Detailed API documentation
+```
+
+### Running Tests
+
+```bash
+# Install test dependencies
+pip install -e ".[test]"
+
+# Run functionality tests
+pytest tests/test_server.py -v
+
+# Test with real queries
+python examples/basic_usage.py
+
+# Test AI agent integration
+python examples/integration_demo.py
+```
+
+### Development Examples
+
+```bash
+# Test author disambiguation
+python examples/basic_usage.py --query "J. Abreu" --institution "EMBO"
+
+# Test work retrieval
+python examples/advanced_queries.py --author-id "A123456789" --type "journal-article"
+
+# Test integration patterns
+python examples/integration_demo.py --workflow "career-analysis"
+```
+
+---
+
+## 📈 Integration Examples
+
+### Academic Research Workflows
+
+Perfect integration with AI-powered research analysis:
+
+```python
+# Enhanced academic research agent
+from alex_agent import AcademicResearchAgent
+
+agent = AcademicResearchAgent(
+    mcp_servers=[alex_mcp],  # Streamlined data processing
+    model="gpt-4.1-2025-04-14"
+)
+
+# Complex research queries with structured data
+result = await agent.research_author(
+    "Find J. Abreu at EMBO with machine learning publications"
+)
+
+# Rich, structured output for AI reasoning
+print(f"Quality Score: {result.quality_score}/100")
+print(f"Author disambiguation: {result.confidence}")
+print(f"Research fields: {result.research_domains}")
+```
+
+### Multi-Agent Systems
+
+```python
+# Collaborative research analysis
+async def research_collaboration_network(seed_author):
+    # Find primary author
+    authors = await alex_mcp.search_authors(seed_author)
+    primary = authors['results'][0]
+    
+    # Get their works
+    works = await alex_mcp.retrieve_author_works(
+        primary['id'], 
+        type="journal-article"
+    )
+    
+    # Analyze co-authors and build network
+    collaborators = set()
+    for work in works['results']:
+        for authorship in work.get('authorships', []):
+            collaborators.add(authorship['author']['display_name'])
+    
+    return {
+        'primary_author': primary,
+        'publication_count': len(works['results']),
+        'collaborator_network': list(collaborators),
+        'research_impact': sum(w['cited_by_count'] for w in works['results'])
+    }
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions to improve functionality and add new features:
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/enhanced-filtering`
+3. **Add tests**: Ensure your changes maintain data quality and structure
+4. **Submit a pull request**: Include examples and documentation
+
+### Development Priorities
+
+- [ ] Enhanced filtering capabilities
+- [ ] Additional data enrichment
+- [ ] Performance optimizations
+- [ ] Integration examples
+- [ ] Documentation improvements
 
 ---
 
@@ -252,3 +576,5 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 - [OpenAlex API Documentation](https://docs.openalex.org/)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [FastMCP](https://github.com/ContextualAI/fastmcp)
+- [OpenAI Agents](https://github.com/openai/openai-agents)
+- [Academic Research Examples](examples/)
