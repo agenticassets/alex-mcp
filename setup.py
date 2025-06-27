@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="alex-mcp",
-    version="4.1.0",
+    version="4.2.0",
     author="OpenAlex MCP Team",
     description="OpenAlex Author Disambiguation MCP Server",
     long_description=long_description,
