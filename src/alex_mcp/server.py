@@ -494,7 +494,7 @@ async def search_authors(
         country_code=country_code,
         limit=limit
     )
-    return response.dict()
+    return response.model_dump()
 
 
 @mcp.tool(
@@ -549,7 +549,7 @@ async def retrieve_author_works(
         min_citations=min_citations,
         peer_reviewed_only=peer_reviewed_only,
     )
-    return response.dict()
+    return response.model_dump()
 
 
 def main():
