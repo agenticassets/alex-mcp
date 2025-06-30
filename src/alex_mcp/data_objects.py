@@ -3,12 +3,26 @@
 Optimized data models for the OpenAlex MCP server.
 
 Streamlined versions focusing on essential information for author disambiguation
-and work retrieval while minimizing token usage.
+and work retrieval while minimizing token usage. Enhanced to preserve comprehensive
+ID information (DOI, PMID, PMCID, OpenAlex, MAG).
 """
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
+
+
+class WorkIDs(BaseModel):
+    """
+    Comprehensive work identifiers from OpenAlex.
+    
+    Preserves all available identifiers for cross-database linkage.
+    """
+    openalex: Optional[str] = None
+    doi: Optional[str] = None
+    pmid: Optional[str] = None
+    pmcid: Optional[str] = None
+    mag: Optional[str] = None
 
 
 class OptimizedAuthorResult(BaseModel):
@@ -47,13 +61,17 @@ class OptimizedWorkResult(BaseModel):
     """
     Streamlined work representation focusing on essential publication info.
     
-    Reduces token usage by ~80% compared to full OpenAlex work object.
+    Reduces token usage by ~80% compared to full OpenAlex work object while
+    preserving comprehensive identifier information.
     """
     id: str
     title: Optional[str] = None
-    doi: Optional[str] = None
+    doi: Optional[str] = None  # Kept for backward compatibility
     publication_year: Optional[int] = None
     type: Optional[str] = None  # journal-article, book-chapter, etc.
+    
+    # COMPREHENSIVE ID INFORMATION - This was missing!
+    ids: Optional[WorkIDs] = None
     
     # Citation metrics
     cited_by_count: Optional[int] = 0
@@ -228,6 +246,36 @@ def extract_authorship_info(authorships: List[Dict[str, Any]]) -> tuple[Optional
     return author_count, first_author, corresponding_author
 
 
+def extract_comprehensive_ids(work_data: Dict[str, Any]) -> WorkIDs:
+    """
+    Extract comprehensive identifier information from OpenAlex work data.
+    
+    This was the missing piece! OpenAlex provides comprehensive IDs in the 'ids' object.
+    
+    Args:
+        work_data: Full OpenAlex work object
+        
+    Returns:
+        WorkIDs object with all available identifiers
+    """
+    ids_data = work_data.get('ids', {})
+    
+    # Extract all available IDs
+    openalex_id = ids_data.get('openalex') or work_data.get('id')
+    doi = ids_data.get('doi') or work_data.get('doi')  # Fallback to standalone doi
+    pmid = ids_data.get('pmid')
+    pmcid = ids_data.get('pmcid')
+    mag = ids_data.get('mag')
+    
+    return WorkIDs(
+        openalex=openalex_id,
+        doi=doi,
+        pmid=pmid,
+        pmcid=pmcid,
+        mag=mag
+    )
+
+
 def optimize_author_data(author_data: Dict[str, Any]) -> OptimizedAuthorResult:
     """
     Convert full OpenAlex author object to optimized version.
@@ -296,18 +344,23 @@ def optimize_work_data(work_data: Dict[str, Any]) -> OptimizedWorkResult:
     """
     Convert full OpenAlex work object to optimized version.
     
+    NOW INCLUDES COMPREHENSIVE ID EXTRACTION!
+    
     Args:
         work_data: Full OpenAlex work object
         
     Returns:
-        OptimizedWorkResult with essential information only
+        OptimizedWorkResult with essential information AND comprehensive IDs
     """
     # Basic work info
     work_id = work_data.get('id', '')
     title = work_data.get('title')
-    doi = work_data.get('doi')
+    doi = work_data.get('doi')  # Kept for backward compatibility
     publication_year = work_data.get('publication_year')
     work_type = work_data.get('type')
+    
+    # EXTRACT COMPREHENSIVE IDS - This is the fix!
+    comprehensive_ids = extract_comprehensive_ids(work_data)
     
     # Citation metrics
     cited_by_count = work_data.get('cited_by_count', 0)
@@ -338,9 +391,10 @@ def optimize_work_data(work_data: Dict[str, Any]) -> OptimizedWorkResult:
     return OptimizedWorkResult(
         id=work_id,
         title=title,
-        doi=doi,
+        doi=doi,  
         publication_year=publication_year,
         type=work_type,
+        ids=comprehensive_ids,  
         cited_by_count=cited_by_count,
         journal_name=journal_name,
         journal_issn=journal_issn,

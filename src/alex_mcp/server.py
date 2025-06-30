@@ -4,23 +4,6 @@ Optimized OpenAlex Author Disambiguation MCP Server with Peer-Review Filtering
 
 Provides a FastMCP-compliant API for author disambiguation and institution resolution
 using the OpenAlex API with streamlined output to minimize token usage.
-
-Key optimizations:
-- Simplified author objects (~70% token reduction)
-- Streamlined work objects (~80% token reduction)
-- Robust peer-review filtering (excludes data catalogs, preprints, etc.)
-- Focused on essential disambiguation and retrieval information
-- Maintains full functionality with minimal data
-
-Features:
-- Author search and disambiguation with essential metadata
-- Institution name resolution (simplified to strings)
-- ORCID integration
-- Key publication and citation metrics
-- Comprehensive peer-review filtering
-- Full MCP protocol compliance
-
-See https://docs.openalex.org/api-entities/authors/author-object for the full Author object specification.
 """
 
 import logging
