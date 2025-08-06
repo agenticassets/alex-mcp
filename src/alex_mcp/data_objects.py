@@ -106,10 +106,21 @@ class OptimizedSearchResponse(BaseModel):
 
 class OptimizedWorksSearchResponse(BaseModel):
     """
-    Streamlined works search response.
+    Streamlined works search response for author works.
     """
     author_id: str
     author_name: Optional[str] = None
+    total_count: int
+    results: List[OptimizedWorkResult]
+    search_time: Optional[datetime] = Field(default_factory=datetime.now)
+    filters: Optional[Dict[str, Any]] = None
+
+
+class OptimizedGeneralWorksSearchResponse(BaseModel):
+    """
+    Streamlined works search response for general work searches.
+    """
+    query: str
     total_count: int
     results: List[OptimizedWorkResult]
     search_time: Optional[datetime] = Field(default_factory=datetime.now)

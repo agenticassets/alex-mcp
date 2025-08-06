@@ -13,6 +13,7 @@ from alex_mcp.data_objects import (
     OptimizedAuthorResult,
     OptimizedSearchResponse,
     OptimizedWorksSearchResponse,
+    OptimizedGeneralWorksSearchResponse,
     OptimizedWorkResult,
     optimize_author_data,
     optimize_work_data
@@ -336,7 +337,7 @@ def search_works_core(
     type: Optional[str] = None,
     limit: int = 25,
     peer_reviewed_only: bool = True
-) -> OptimizedWorksSearchResponse:
+) -> OptimizedGeneralWorksSearchResponse:
     """
     Core logic for searching works using OpenAlex with title/content search.
     Returns streamlined work data to minimize token usage.
@@ -351,7 +352,7 @@ def search_works_core(
         peer_reviewed_only: If True, apply peer-review filters (default: True)
 
     Returns:
-        OptimizedWorksSearchResponse: Streamlined response with work data.
+        OptimizedGeneralWorksSearchResponse: Streamlined response with work data.
     """
     try:
         # Ensure reasonable limits to control token usage
@@ -365,13 +366,14 @@ def search_works_core(
         
         # Add author filter if provided
         if author:
-            # Use authorships filter for author name
-            filters['authorships'] = {'author': {'display_name': author}}
+            # For general work search, we can use raw_author_name.search for name-based filtering
+            # This searches for works where the author name appears in the raw author strings
+            filters['raw_author_name.search'] = author
         
-        # Add institution filter if provided
+        # Add institution filter if provided  
         if institution:
-            filters['authorships'] = filters.get('authorships', {})
-            filters['authorships']['institutions'] = {'display_name': institution}
+            # Use the correct field for institution name filtering
+            filters['authorships.institutions.display_name.search'] = institution
         
         # Add publication year filter
         if publication_year:
@@ -414,7 +416,7 @@ def search_works_core(
         
         logger.info(f"Returning {len(optimized_works)} optimized works for search query")
         
-        return OptimizedWorksSearchResponse(
+        return OptimizedGeneralWorksSearchResponse(
             query=query,
             total_count=len(optimized_works),
             results=optimized_works,
@@ -423,7 +425,7 @@ def search_works_core(
         
     except Exception as e:
         logger.error(f"Error searching works for query '{query}': {e}")
-        return OptimizedWorksSearchResponse(
+        return OptimizedGeneralWorksSearchResponse(
             query=query,
             total_count=0,
             results=[],
@@ -705,7 +707,7 @@ async def search_works(
         peer_reviewed_only: If True, apply peer-review filters (default: True)
 
     Returns:
-        dict: Serialized OptimizedWorksSearchResponse with streamlined work data.
+        dict: Serialized OptimizedGeneralWorksSearchResponse with streamlined work data.
     """
     # Ensure reasonable limits to control token usage
     limit = min(limit, 100)
