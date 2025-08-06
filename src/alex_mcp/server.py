@@ -328,6 +328,109 @@ def search_authors_core(
         )
 
 
+def search_works_core(
+    query: str,
+    author: Optional[str] = None,
+    institution: Optional[str] = None,
+    publication_year: Optional[int] = None,
+    type: Optional[str] = None,
+    limit: int = 25,
+    peer_reviewed_only: bool = True
+) -> OptimizedWorksSearchResponse:
+    """
+    Core logic for searching works using OpenAlex with title/content search.
+    Returns streamlined work data to minimize token usage.
+
+    Args:
+        query: Search query (title, abstract, or general search)
+        author: (Optional) Author name filter
+        institution: (Optional) Institution name filter
+        publication_year: (Optional) Publication year filter
+        type: (Optional) Work type filter (e.g., "article", "letter")
+        limit: Maximum number of results (default: 25, max: 100)
+        peer_reviewed_only: If True, apply peer-review filters (default: True)
+
+    Returns:
+        OptimizedWorksSearchResponse: Streamlined response with work data.
+    """
+    try:
+        # Ensure reasonable limits to control token usage
+        limit = min(limit, 100)
+        
+        # Build the search query using PyAlex
+        works_query = pyalex.Works().search(query)
+        
+        # Build filters
+        filters = {}
+        
+        # Add author filter if provided
+        if author:
+            # Use authorships filter for author name
+            filters['authorships'] = {'author': {'display_name': author}}
+        
+        # Add institution filter if provided
+        if institution:
+            filters['authorships'] = filters.get('authorships', {})
+            filters['authorships']['institutions'] = {'display_name': institution}
+        
+        # Add publication year filter
+        if publication_year:
+            filters['publication_year'] = publication_year
+        
+        # Add type filter
+        if type:
+            filters['type'] = type
+        elif peer_reviewed_only:
+            # Focus on journal articles and letters for academic work
+            filters['type'] = 'article|letter'
+        
+        # Add basic quality filters
+        if peer_reviewed_only:
+            filters['is_retracted'] = False
+        
+        # Apply filters to query
+        if filters:
+            works_query = works_query.filter(**filters)
+        
+        # Execute query
+        logger.info(f"Searching OpenAlex works with query: '{query[:50]}...' and {len(filters)} filters")
+        results = works_query.get(per_page=limit)
+        
+        # Apply additional peer-review filtering if requested
+        if peer_reviewed_only and results:
+            logger.info(f"Applying peer-review filtering to {len(results)} results...")
+            results = filter_peer_reviewed_works(results)
+            logger.info(f"After peer-review filtering: {len(results)} results remain")
+        
+        # Convert to optimized format
+        optimized_works = []
+        for work in results:
+            try:
+                optimized_work = optimize_work_data(work)
+                optimized_works.append(optimized_work)
+            except Exception as e:
+                logger.warning(f"Error optimizing work data: {e}")
+                continue
+        
+        logger.info(f"Returning {len(optimized_works)} optimized works for search query")
+        
+        return OptimizedWorksSearchResponse(
+            query=query,
+            total_count=len(optimized_works),
+            results=optimized_works,
+            filters=filters
+        )
+        
+    except Exception as e:
+        logger.error(f"Error searching works for query '{query}': {e}")
+        return OptimizedWorksSearchResponse(
+            query=query,
+            total_count=0,
+            results=[],
+            filters={}
+        )
+
+
 def retrieve_author_works_core(
     author_id: str,
     limit: int = 20_000,  # High default limit for comprehensive analysis
@@ -563,6 +666,58 @@ async def retrieve_author_works(
         journal_only=journal_only,
         min_citations=min_citations,
         peer_reviewed_only=peer_reviewed_only,
+    )
+    return response.model_dump()
+
+
+@mcp.tool(
+    annotations={
+        "title": "Search Works (Optimized)",
+        "description": (
+            "Search for academic works by title, content, or keywords with optional filters. "
+            "Returns streamlined work data optimized for AI agents with ~80% fewer tokens. "
+            "Supports author, institution, publication year, and type filters. "
+            "Automatically applies peer-review filtering to exclude data catalogs and preprints."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_works(
+    query: str,
+    author: Optional[str] = None,
+    institution: Optional[str] = None,
+    publication_year: Optional[int] = None,
+    type: Optional[str] = None,
+    limit: int = 25,
+    peer_reviewed_only: bool = True
+) -> dict:
+    """
+    Optimized MCP tool wrapper for searching works.
+
+    Args:
+        query: Search query (title, abstract, or general search)
+        author: (Optional) Author name filter
+        institution: (Optional) Institution name filter
+        publication_year: (Optional) Publication year filter
+        type: (Optional) Work type filter (e.g., "article", "letter")
+        limit: Maximum number of results (default: 25, max: 100)
+        peer_reviewed_only: If True, apply peer-review filters (default: True)
+
+    Returns:
+        dict: Serialized OptimizedWorksSearchResponse with streamlined work data.
+    """
+    # Ensure reasonable limits to control token usage
+    limit = min(limit, 100)
+    
+    response = search_works_core(
+        query=query,
+        author=author,
+        institution=institution,
+        publication_year=publication_year,
+        type=type,
+        limit=limit,
+        peer_reviewed_only=peer_reviewed_only
     )
     return response.model_dump()
 
