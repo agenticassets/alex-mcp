@@ -87,7 +87,12 @@ def is_peer_reviewed_journal(work_data) -> bool:
         bool: True if the work appears to be from a peer-reviewed journal
     """
     try:
-        title = work_data.get('title', '').lower()
+        # Safe string extraction with None checking
+        title = work_data.get('title') or ''
+        if isinstance(title, str):
+            title = title.lower()
+        else:
+            title = str(title).lower() if title is not None else ''
         
         # Quick exclusions based on title patterns
         title_exclusions = [
@@ -120,13 +125,17 @@ def is_peer_reviewed_journal(work_data) -> bool:
             logger.debug("Excluding work without source")
             return False
         
-        # Get journal/source information
-        journal_name = source.get('display_name', '').lower()
+        # Get journal/source information with safe None checking
+        journal_name_raw = source.get('display_name') or ''
+        journal_name = journal_name_raw.lower() if isinstance(journal_name_raw, str) else str(journal_name_raw).lower()
+        
         publisher = work_data.get('publisher', '')
         doi = work_data.get('doi')
         issn_l = source.get('issn_l')
         issn = source.get('issn')
-        source_type = source.get('type', '').lower()
+        
+        source_type_raw = source.get('type') or ''
+        source_type = source_type_raw.lower() if isinstance(source_type_raw, str) else str(source_type_raw).lower()
         
         # CRITICAL: Exclude known data catalogs by journal name
         excluded_journals = [
@@ -166,8 +175,9 @@ def is_peer_reviewed_journal(work_data) -> bool:
             logger.debug(f"Excluding non-journal source type: {source_type}")
             return False
         
-        # Work type should be article or letter
-        work_type = work_data.get('type', '').lower()
+        # Work type should be article or letter with safe None checking
+        work_type_raw = work_data.get('type') or ''
+        work_type = work_type_raw.lower() if isinstance(work_type_raw, str) else str(work_type_raw).lower()
         if work_type not in ['article', 'letter']:
             logger.debug(f"Excluding work type: {work_type}")
             return False
