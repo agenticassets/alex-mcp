@@ -297,7 +297,7 @@ def search_authors_core(
             query = query.filter(**filters)
         
         # Execute query with limit
-        results = query.get(per_page=min(limit, 25))  # Cap at 25 to control costs
+        results = query.get(per_page=min(limit, 100))  # Increased for comprehensive search
         authors = list(results)
         
         # Convert to optimized format
@@ -330,7 +330,7 @@ def search_authors_core(
 
 def retrieve_author_works_core(
     author_id: str,
-    limit: int = 10,  # Reduced default limit
+    limit: int = 20_000,  # High default limit for comprehensive analysis
     order_by: str = "date",  # "date" or "citations"
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
@@ -345,7 +345,7 @@ def retrieve_author_works_core(
 
     Args:
         author_id: OpenAlex Author ID
-        limit: Maximum number of results (default: 10, max: 20)
+        limit: Maximum number of results (default: 2000 for comprehensive analysis)
         order_by: Sort order - "date" or "citations"
         publication_year: Filter by specific year
         type: Filter by work type (e.g., "journal-article")
@@ -357,8 +357,7 @@ def retrieve_author_works_core(
         OptimizedWorksSearchResponse: Streamlined response with peer-reviewed work data.
     """
     try:
-        # Ensure reasonable limits
-        limit = min(limit, 20)
+        limit = min(limit, 20_000)
         
         # Build base filters
         filters = {"author.id": author_id}
@@ -386,7 +385,7 @@ def retrieve_author_works_core(
 
         # Build query - get more results for post-filtering if needed
         if peer_reviewed_only:
-            initial_limit = min(limit * 4, 80)  # Get 4x more for filtering
+            initial_limit = min(limit * 4, 20_000)  # Get 4x more for filtering, much higher limit
         else:
             initial_limit = limit
             
@@ -398,10 +397,20 @@ def retrieve_author_works_core(
         else:
             works_query = works_query.sort(publication_date="desc")
         
-        # Execute query
-        logger.info(f"Querying OpenAlex for {initial_limit} works with filters: {filters}")
-        works = list(works_query.get(per_page=initial_limit))
-        logger.info(f"Retrieved {len(works)} works from OpenAlex")
+        # Execute query using pagination to get ALL works
+        logger.info(f"Querying OpenAlex for up to {initial_limit} works with filters: {filters}")
+        
+        # Use paginate() to get all works, not just the first page
+        all_works = []
+        pager = works_query.paginate(per_page=200, n_max=initial_limit)  # Use 200 per page (API recommended)
+        
+        for page in pager:
+            all_works.extend(page)
+            if len(all_works) >= initial_limit:
+                break
+        
+        works = all_works[:initial_limit]  # Ensure we don't exceed the limit
+        logger.info(f"Retrieved {len(works)} works from OpenAlex via pagination")
         
         # Apply peer-review filtering if requested
         if peer_reviewed_only:
@@ -479,13 +488,13 @@ async def search_authors(
         institution: (Optional) Institution name filter.
         topic: (Optional) Topic filter.
         country_code: (Optional) Country code filter.
-        limit: Maximum number of results to return (default: 15, max: 25).
+        limit: Maximum number of results to return (default: 15, max: 100).
 
     Returns:
         dict: Serialized OptimizedSearchResponse with streamlined author data.
     """
     # Ensure reasonable limits to control token usage
-    limit = min(limit, 25)
+    limit = min(limit, 100)  # Increased for comprehensive author search
     
     response = search_authors_core(
         name=name,
@@ -512,7 +521,7 @@ async def search_authors(
 )
 async def retrieve_author_works(
     author_id: str,
-    limit: int = 10,
+    limit: Optional[int] = None,
     order_by: str = "date",
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
@@ -525,7 +534,7 @@ async def retrieve_author_works(
 
     Args:
         author_id: OpenAlex Author ID (e.g., 'https://openalex.org/A123456789')
-        limit: Maximum number of results (default: 10, max: 20)
+        limit: Maximum number of results (default: None = ALL works, max: 2000)
         order_by: Sort order - "date" for newest first, "citations" for most cited first
         publication_year: Filter by specific publication year
         type: Filter by work type (e.g., "journal-article", "letter")
@@ -536,8 +545,14 @@ async def retrieve_author_works(
     Returns:
         dict: Serialized OptimizedWorksSearchResponse with peer-reviewed journal works only.
     """
-    # Ensure reasonable limits to control token usage
-    limit = min(limit, 20)
+    # Handle limit: None means ALL works, otherwise cap at reasonable limit
+    logger.info(f"MCP tool received limit parameter: {limit}")
+    if limit is None:
+        limit = 2000  # Set a very high limit to get ALL works
+        logger.info(f"No limit specified, setting to {limit} for comprehensive retrieval")
+    else:
+        limit = min(limit, 2000)  # Increased max limit for comprehensive analysis
+        logger.info(f"Explicit limit specified, capped to {limit}")
     
     response = retrieve_author_works_core(
         author_id=author_id,
