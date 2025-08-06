@@ -262,14 +262,25 @@ def filter_peer_reviewed_works(works: list) -> list:
     logger.info(f"Starting filtering of {len(works)} works...")
     
     for i, work in enumerate(works):
-        title = work.get('title', 'Unknown')[:60]
-        
-        if is_peer_reviewed_journal(work):
-            filtered_works.append(work)
-            logger.debug(f"✓ KEPT work {i+1}: {title}")
-        else:
+        # Safe handling of potentially None work or title
+        if work is None:
+            logger.warning(f"Skipping None work at position {i+1}")
             excluded_count += 1
-            logger.debug(f"✗ EXCLUDED work {i+1}: {title}")
+            continue
+            
+        title_raw = work.get('title') if isinstance(work, dict) else None
+        title = (title_raw or 'Unknown')[:60] if title_raw is not None else 'Unknown'
+        
+        try:
+            if is_peer_reviewed_journal(work):
+                filtered_works.append(work)
+                logger.debug(f"✓ KEPT work {i+1}: {title}")
+            else:
+                excluded_count += 1
+                logger.debug(f"✗ EXCLUDED work {i+1}: {title}")
+        except Exception as e:
+            logger.error(f"Error filtering work {i+1} (title: {title}): {e}")
+            excluded_count += 1
     
     logger.info(f"Filtering complete: {len(filtered_works)} kept, {excluded_count} excluded from {len(works)} total")
     return filtered_works
