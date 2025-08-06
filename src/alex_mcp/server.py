@@ -237,7 +237,12 @@ def is_peer_reviewed_journal(work_data) -> bool:
         return True
         
     except Exception as e:
-        logger.warning(f"Error in peer review check: {e}")
+        logger.error(f"Error in peer review check for work: {e}")
+        logger.error(f"Work data keys: {list(work_data.keys()) if isinstance(work_data, dict) else 'Not a dict'}")
+        logger.error(f"Work title: {repr(work_data.get('title') if isinstance(work_data, dict) else 'N/A')}")
+        logger.error(f"Primary location: {repr(work_data.get('primary_location') if isinstance(work_data, dict) else 'N/A')}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return False
 
 
