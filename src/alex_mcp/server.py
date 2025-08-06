@@ -336,20 +336,23 @@ def search_works_core(
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
     limit: int = 25,
-    peer_reviewed_only: bool = True
+    peer_reviewed_only: bool = True,
+    search_type: str = "general"
 ) -> OptimizedGeneralWorksSearchResponse:
     """
-    Core logic for searching works using OpenAlex with title/content search.
+    Core logic for searching works using OpenAlex with configurable search modes.
     Returns streamlined work data to minimize token usage.
 
     Args:
-        query: Search query (title, abstract, or general search)
+        query: Search query text
         author: (Optional) Author name filter
         institution: (Optional) Institution name filter
         publication_year: (Optional) Publication year filter
         type: (Optional) Work type filter (e.g., "article", "letter")
         limit: Maximum number of results (default: 25, max: 100)
         peer_reviewed_only: If True, apply peer-review filters (default: True)
+        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only), 
+                    or "title_and_abstract" (title and abstract only)
 
     Returns:
         OptimizedGeneralWorksSearchResponse: Streamlined response with work data.
@@ -358,11 +361,19 @@ def search_works_core(
         # Ensure reasonable limits to control token usage
         limit = min(limit, 100)
         
-        # Build the search query using PyAlex
-        works_query = pyalex.Works().search(query)
-        
-        # Build filters
-        filters = {}
+        # Build the search query using PyAlex based on search_type
+        if search_type == "title":
+            # Use title-specific search for precise title matching
+            works_query = pyalex.Works()
+            filters = {'title.search': query}
+        elif search_type == "title_and_abstract":
+            # Use title and abstract search
+            works_query = pyalex.Works()
+            filters = {'title_and_abstract.search': query}
+        else:  # search_type == "general" or any other value
+            # Use general search across title, abstract, and fulltext (default behavior)
+            works_query = pyalex.Works().search(query)
+            filters = {}
         
         # Add author filter if provided
         if author:
@@ -395,7 +406,7 @@ def search_works_core(
             works_query = works_query.filter(**filters)
         
         # Execute query
-        logger.info(f"Searching OpenAlex works with query: '{query[:50]}...' and {len(filters)} filters")
+        logger.info(f"Searching OpenAlex works with search_type='{search_type}', query: '{query[:50]}...' and {len(filters)} filters")
         results = works_query.get(per_page=limit)
         
         # Apply additional peer-review filtering if requested
@@ -676,8 +687,10 @@ async def retrieve_author_works(
     annotations={
         "title": "Search Works (Optimized)",
         "description": (
-            "Search for academic works by title, content, or keywords with optional filters. "
+            "Search for academic works with configurable search modes and optional filters. "
             "Returns streamlined work data optimized for AI agents with ~80% fewer tokens. "
+            "Supports different search types: 'general' (title/abstract/fulltext), 'title' (title only), "
+            "or 'title_and_abstract' (title and abstract only). "
             "Supports author, institution, publication year, and type filters. "
             "Automatically applies peer-review filtering to exclude data catalogs and preprints."
         ),
@@ -692,19 +705,22 @@ async def search_works(
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
     limit: int = 25,
-    peer_reviewed_only: bool = True
+    peer_reviewed_only: bool = True,
+    search_type: str = "general"
 ) -> dict:
     """
     Optimized MCP tool wrapper for searching works.
 
     Args:
-        query: Search query (title, abstract, or general search)
+        query: Search query text
         author: (Optional) Author name filter
         institution: (Optional) Institution name filter
         publication_year: (Optional) Publication year filter
         type: (Optional) Work type filter (e.g., "article", "letter")
         limit: Maximum number of results (default: 25, max: 100)
         peer_reviewed_only: If True, apply peer-review filters (default: True)
+        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only), 
+                    or "title_and_abstract" (title and abstract only)
 
     Returns:
         dict: Serialized OptimizedGeneralWorksSearchResponse with streamlined work data.
@@ -719,7 +735,8 @@ async def search_works(
         publication_year=publication_year,
         type=type,
         limit=limit,
-        peer_reviewed_only=peer_reviewed_only
+        peer_reviewed_only=peer_reviewed_only,
+        search_type=search_type
     )
     return response.model_dump()
 
