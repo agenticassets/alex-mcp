@@ -360,32 +360,34 @@ def search_authors_core(
 def autocomplete_authors_core(
     name: str, 
     context: Optional[str] = None, 
-    limit: int = 5
+    limit: int = 10,
+    filter_no_institution: bool = True,
+    enable_institution_ranking: bool = True
 ) -> AutocompleteAuthorsResponse:
     """
-    Core function for author autocomplete using PyAlex.
+    Enhanced core function for author autocomplete with intelligent filtering and ranking.
     
     Args:
         name: Author name to search for
         context: Optional context for better matching (institution, research area, etc.)
-        limit: Maximum number of candidates to return
+        limit: Maximum number of candidates to return (increased default to 10)
+        filter_no_institution: If True, exclude candidates with no institutional affiliation
+        enable_institution_ranking: If True, rank candidates by institutional context relevance
         
     Returns:
-        AutocompleteAuthorsResponse with candidate authors
+        AutocompleteAuthorsResponse with filtered and ranked candidate authors
     """
     try:
         logger.info(f"🔍 Autocompleting authors for: '{name}' (limit: {limit})")
         if context:
             logger.info(f"   📝 Context provided: {context}")
         
-        # Use PyAlex autocomplete for authors
-        results = pyalex.Authors().autocomplete(name)
+        # Use PyAlex autocomplete for authors - get more results for filtering
+        raw_limit = min(limit * 2, 20)  # Get 2x candidates for filtering
+        results = pyalex.Authors().autocomplete(name)[:raw_limit]
         
-        # Limit results
-        results = results[:limit]
-        
-        # Convert to our data model
-        candidates = []
+        # Convert to our data model first
+        all_candidates = []
         for result in results:
             candidate = AutocompleteAuthorCandidate(
                 openalex_id=result.get('id', ''),
@@ -396,23 +398,100 @@ def autocomplete_authors_core(
                 entity_type=result.get('entity_type', 'author'),
                 external_id=result.get('external_id')
             )
-            candidates.append(candidate)
+            all_candidates.append(candidate)
+        
+        # ENHANCEMENT 1: Filter out candidates with no institution
+        if filter_no_institution:
+            filtered_candidates = [
+                c for c in all_candidates 
+                if c.institution_hint and c.institution_hint not in ['No institution', 'None', '']
+            ]
+            excluded_count = len(all_candidates) - len(filtered_candidates)
+            if excluded_count > 0:
+                logger.info(f"   🔍 Filtered out {excluded_count} candidates with no institution")
+        else:
+            filtered_candidates = all_candidates
+        
+        # ENHANCEMENT 2: Institution-aware ranking (if context provided)
+        if enable_institution_ranking and context and filtered_candidates:
+            scored_candidates = []
+            context_lower = context.lower()
             
+            for candidate in filtered_candidates:
+                relevance_score = 0
+                matched_terms = []
+                
+                inst_hint = (candidate.institution_hint or '').lower()
+                
+                # High-value institutional matches
+                high_value_terms = [
+                    'max planck', 'harvard', 'stanford', 'mit', 'cambridge', 'oxford',
+                    'excellence cluster', 'crick', 'wellcome', 'nih', 'cnrs', 'inserm'
+                ]
+                for term in high_value_terms:
+                    if term in context_lower and term in inst_hint:
+                        relevance_score += 3
+                        matched_terms.append(f"{term} (+3)")
+                
+                # Location-based matches
+                location_terms = ['germany', 'uk', 'usa', 'france', 'köln', 'cologne', 'london', 'boston', 'berlin']
+                for term in location_terms:
+                    if term in context_lower and term in inst_hint:
+                        relevance_score += 2
+                        matched_terms.append(f"{term} (+2)")
+                
+                # Research field alignment (basic keyword matching)
+                research_terms = ['biology', 'chemistry', 'biochemistry', 'physics', 'medicine']
+                for term in research_terms:
+                    if term in context_lower and term in inst_hint:
+                        relevance_score += 1
+                        matched_terms.append(f"{term} (+1)")
+                
+                # High-impact researcher bonus
+                if candidate.cited_by_count and candidate.cited_by_count > 1000:
+                    relevance_score += 1
+                    matched_terms.append("high-impact (+1)")
+                
+                scored_candidates.append({
+                    'candidate': candidate,
+                    'relevance_score': relevance_score,
+                    'matched_terms': matched_terms
+                })
+            
+            # Sort by relevance score (descending), then by citation count
+            scored_candidates.sort(key=lambda x: (x['relevance_score'], x['candidate'].cited_by_count), reverse=True)
+            
+            # Extract ranked candidates
+            final_candidates = [sc['candidate'] for sc in scored_candidates[:limit]]
+            
+            # Log ranking results
+            logger.info(f"   🏆 Institution-aware ranking applied:")
+            for i, sc in enumerate(scored_candidates[:3], 1):  # Log top 3
+                candidate = sc['candidate']
+                logger.info(f"      {i}. {candidate.display_name} (score: {sc['relevance_score']}, {candidate.institution_hint})")
+        else:
+            # No ranking, just take first N candidates
+            final_candidates = filtered_candidates[:limit]
+        
+        # Log final candidates
+        for candidate in final_candidates:
             logger.info(f"   👤 {candidate.display_name} ({candidate.institution_hint or 'No institution'}) - {candidate.works_count} works")
         
         response = AutocompleteAuthorsResponse(
             query=name,
             context=context,
-            total_candidates=len(candidates),
-            candidates=candidates,
+            total_candidates=len(final_candidates),
+            candidates=final_candidates,
             search_metadata={
                 'api_used': 'openalex_autocomplete',
                 'has_context': context is not None,
+                'filtered_no_institution': filter_no_institution,
+                'institution_ranking_enabled': enable_institution_ranking and context is not None,
                 'response_time_ms': None  # Could be added with timing
             }
         )
         
-        logger.info(f"✅ Found {len(candidates)} candidates for '{name}'")
+        logger.info(f"✅ Found {len(final_candidates)} candidates for '{name}'")
         return response
         
     except Exception as e:
@@ -748,11 +827,11 @@ async def retrieve_author_works(
     peer_reviewed_only: bool = True,
 ) -> dict:
     """
-    Enhanced MCP tool wrapper for retrieving peer-reviewed journal works.
+    Enhanced MCP tool wrapper for retrieving author works with flexible filtering.
 
     Args:
         author_id: OpenAlex Author ID (e.g., 'https://openalex.org/A123456789')
-        limit: Maximum number of results (default: None = ALL works, max: 2000)
+        limit: Maximum number of results (default: None = ALL works via pagination, max: 2000)
         order_by: Sort order - "date" for newest first, "citations" for most cited first
         publication_year: Filter by specific publication year
         type: Filter by work type (e.g., "journal-article", "letter")
@@ -761,7 +840,17 @@ async def retrieve_author_works(
         peer_reviewed_only: If True, apply balanced peer-review filters (default: True)
 
     Returns:
-        dict: Serialized OptimizedWorksSearchResponse with peer-reviewed journal works only.
+        dict: Serialized OptimizedWorksSearchResponse with author's works.
+        
+    Usage Patterns:
+        # For AI validation (sample of high-impact works)
+        retrieve_author_works(author_id, limit=20, order_by="citations")
+        
+        # For complete benchmark evaluation (ALL works, minimal filtering)
+        retrieve_author_works(author_id, peer_reviewed_only=False, journal_only=False)
+        
+        # For peer-reviewed works only (default behavior)
+        retrieve_author_works(author_id)
     """
     # Handle limit: None means ALL works, otherwise cap at reasonable limit
     logger.info(f"MCP tool received limit parameter: {limit}")
@@ -860,39 +949,52 @@ async def search_works(
 async def autocomplete_authors(
     name: str,
     context: Optional[str] = None, 
-    limit: int = 5
+    limit: int = 10,
+    filter_no_institution: bool = True,
+    enable_institution_ranking: bool = True
 ) -> dict:
     """
-    Autocomplete authors using OpenAlex API for smart disambiguation.
+    Enhanced autocomplete authors with intelligent filtering and ranking.
     
     Args:
         name: Author name to search for (e.g., "James Briscoe", "M. Ralser")
-        context: Optional context to help with disambiguation (e.g., "Francis Crick Institute developmental biology", "Charité Berlin biochemistry")
-        limit: Maximum number of candidates to return (default: 5, max: 10)
+        context: Optional context to help with disambiguation (e.g., "Francis Crick Institute developmental biology", "Max Planck Institute Köln Germany")
+        limit: Maximum number of candidates to return (default: 10, max: 15)
+        filter_no_institution: If True, exclude candidates with no institutional affiliation (default: True)
+        enable_institution_ranking: If True, rank candidates by institutional context relevance (default: True)
         
     Returns:
-        dict: Serialized AutocompleteAuthorsResponse with candidate authors, including:
+        dict: Serialized AutocompleteAuthorsResponse with filtered and ranked candidate authors, including:
         - openalex_id: Full OpenAlex author ID
         - display_name: Author's display name
         - institution_hint: Current/last known institution 
         - works_count: Number of published works
         - cited_by_count: Total citation count
         - external_id: ORCID or other external identifiers
+        - search_metadata: Information about filtering and ranking applied
         
     Example usage:
-        # Get candidates for disambiguation
-        candidates = await autocomplete_authors("James Briscoe", context="Francis Crick Institute")
+        # Get high-quality candidates with institutional filtering
+        candidates = await autocomplete_authors("Ivan Matić", context="Max Planck Institute Biology Ageing Köln Germany")
         
-        # AI can then select the best match based on institutional context
-        # or retrieve recent works for further verification
+        # For seasoned researchers, institution hints and ranking help disambiguation
+        # AI can then select the best match or retrieve works for further verification
+        
+    Enhanced Features:
+        - Filters out candidates with no institutional affiliation (reduces noise)
+        - Institution-aware ranking when context is provided (improves accuracy)
+        - Higher default limit (10 vs 5) for better candidate coverage
+        - Detailed logging for debugging and optimization
     """
-    # Ensure reasonable limits
-    limit = min(max(limit, 1), 10)
+    # Ensure reasonable limits - increased max to 15
+    limit = min(max(limit, 1), 15)
     
     response = autocomplete_authors_core(
         name=name,
         context=context, 
-        limit=limit
+        limit=limit,
+        filter_no_institution=filter_no_institution,
+        enable_institution_ranking=enable_institution_ranking
     )
     return response.model_dump()
 
