@@ -999,6 +999,454 @@ async def autocomplete_authors(
     return response.model_dump()
 
 
+# PubMed Integration Functions
+import requests
+import xml.etree.ElementTree as ET
+from typing import Union
+
+def pubmed_search_core(
+    query: str,
+    max_results: int = 20,
+    search_type: str = "author"
+) -> dict:
+    """
+    Core PubMed search functionality using E-utilities API.
+    
+    Args:
+        query: Search query (author name, DOI, or keywords)
+        max_results: Maximum number of results to return
+        search_type: Type of search ("author", "doi", "title", "keywords")
+        
+    Returns:
+        dict with search results including PMIDs, total count, and basic metadata
+    """
+    base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+    
+    try:
+        # Format search term based on type
+        if search_type == "author":
+            search_term = f'"{query}"[Author]'
+        elif search_type == "doi":
+            clean_doi = query.replace('https://doi.org/', '').replace('http://dx.doi.org/', '')
+            search_term = f'"{clean_doi}"[AID]'
+        elif search_type == "title":
+            search_term = f'"{query}"[Title]'
+        else:  # keywords
+            search_term = query
+        
+        logger.info(f"🔍 PubMed search: {search_term} (max: {max_results})")
+        
+        # Search PubMed
+        search_url = f"{base_url}esearch.fcgi"
+        search_params = {
+            'db': 'pubmed',
+            'term': search_term,
+            'retmax': max_results,
+            'retmode': 'json',
+            'sort': 'relevance'
+        }
+        
+        response = requests.get(search_url, params=search_params, timeout=10)
+        response.raise_for_status()
+        search_data = response.json()
+        
+        pmids = search_data.get('esearchresult', {}).get('idlist', [])
+        total_count = int(search_data.get('esearchresult', {}).get('count', 0))
+        
+        logger.info(f"📊 Found {total_count} total results, retrieved {len(pmids)} PMIDs")
+        
+        # Get basic details for retrieved PMIDs (if any)
+        articles = []
+        if pmids:
+            articles = get_pubmed_summaries(pmids[:min(len(pmids), 10)])  # Limit to 10 for performance
+        
+        return {
+            'query': query,
+            'search_type': search_type,
+            'search_term_used': search_term,
+            'total_count': total_count,
+            'retrieved_count': len(pmids),
+            'pmids': pmids,
+            'articles': articles,
+            'search_metadata': {
+                'api_used': 'pubmed_esearch',
+                'max_results_requested': max_results,
+                'response_time_ms': None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ PubMed search error: {e}")
+        return {
+            'query': query,
+            'search_type': search_type,
+            'total_count': 0,
+            'retrieved_count': 0,
+            'pmids': [],
+            'articles': [],
+            'error': str(e)
+        }
+
+
+def get_pubmed_summaries(pmids: list) -> list:
+    """
+    Get summary information for a list of PMIDs using esummary.
+    
+    Args:
+        pmids: List of PubMed IDs
+        
+    Returns:
+        List of article summaries with basic metadata
+    """
+    if not pmids:
+        return []
+    
+    base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+    
+    try:
+        # Get summaries
+        summary_url = f"{base_url}esummary.fcgi"
+        summary_params = {
+            'db': 'pubmed',
+            'id': ','.join(pmids),
+            'retmode': 'json'
+        }
+        
+        response = requests.get(summary_url, params=summary_params, timeout=15)
+        response.raise_for_status()
+        summary_data = response.json()
+        
+        articles = []
+        uids = summary_data.get('result', {}).get('uids', [])
+        
+        for uid in uids:
+            article_data = summary_data.get('result', {}).get(uid, {})
+            if article_data:
+                # Extract key information
+                authors = article_data.get('authors', [])
+                author_names = [author.get('name', '') for author in authors[:5]]  # First 5 authors
+                
+                article = {
+                    'pmid': uid,
+                    'title': article_data.get('title', ''),
+                    'authors': author_names,
+                    'journal': article_data.get('fulljournalname', ''),
+                    'pub_date': article_data.get('pubdate', ''),
+                    'doi': article_data.get('elocationid', ''),  # Often contains DOI
+                    'pmcid': article_data.get('pmcid', ''),
+                    'publication_types': article_data.get('pubtype', [])
+                }
+                articles.append(article)
+        
+        logger.info(f"📄 Retrieved summaries for {len(articles)} articles")
+        return articles
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting PubMed summaries: {e}")
+        return []
+
+
+def get_pubmed_author_sample(author_name: str, sample_size: int = 5) -> dict:
+    """
+    Get a sample of works by an author from PubMed with institutional information.
+    
+    Args:
+        author_name: Author name to search for
+        sample_size: Number of sample works to analyze in detail
+        
+    Returns:
+        dict with author sample analysis including affiliations and name variants
+    """
+    try:
+        logger.info(f"🔍 Getting PubMed author sample for: {author_name}")
+        
+        # Search for author
+        search_result = pubmed_search_core(author_name, max_results=sample_size, search_type="author")
+        
+        if not search_result['pmids']:
+            return {
+                'author_name': author_name,
+                'total_works': 0,
+                'sample_works': [],
+                'institutional_keywords': [],
+                'name_variants': [],
+                'email_addresses': []
+            }
+        
+        # Get detailed information for sample
+        sample_pmids = search_result['pmids'][:sample_size]
+        detailed_articles = []
+        all_affiliations = []
+        name_variants = set()
+        email_addresses = set()
+        
+        for pmid in sample_pmids:
+            article_details = get_detailed_pubmed_article(pmid, author_name)
+            if article_details:
+                detailed_articles.append(article_details)
+                
+                # Extract affiliations and variants for target author
+                for author_info in article_details.get('author_details', []):
+                    if is_target_author(author_info, author_name):
+                        all_affiliations.extend(author_info.get('affiliations', []))
+                        
+                        # Collect name variants
+                        full_name = f"{author_info['first_name']} {author_info['last_name']}".strip()
+                        if full_name:
+                            name_variants.add(full_name)
+                        
+                        # Extract email addresses
+                        for affil in author_info.get('affiliations', []):
+                            emails = extract_emails_from_text(affil)
+                            email_addresses.update(emails)
+        
+        # Extract institutional keywords
+        institutional_keywords = extract_institutional_keywords(all_affiliations)
+        
+        return {
+            'author_name': author_name,
+            'total_works': search_result['total_count'],
+            'sample_works': detailed_articles,
+            'institutional_keywords': institutional_keywords,
+            'name_variants': list(name_variants),
+            'email_addresses': list(email_addresses),
+            'sample_metadata': {
+                'sample_size': len(detailed_articles),
+                'affiliations_found': len(all_affiliations)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error in PubMed author sample: {e}")
+        return {
+            'author_name': author_name,
+            'total_works': 0,
+            'sample_works': [],
+            'error': str(e)
+        }
+
+
+def get_detailed_pubmed_article(pmid: str, target_author: str) -> dict:
+    """Get detailed article information including author affiliations"""
+    base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+    
+    try:
+        fetch_url = f"{base_url}efetch.fcgi"
+        fetch_params = {
+            'db': 'pubmed',
+            'id': pmid,
+            'retmode': 'xml',
+            'rettype': 'abstract'
+        }
+        
+        response = requests.get(fetch_url, params=fetch_params, timeout=10)
+        response.raise_for_status()
+        
+        # Parse XML
+        root = ET.fromstring(response.text)
+        article = root.find('.//PubmedArticle')
+        
+        if article is None:
+            return None
+        
+        # Extract basic info
+        title_elem = article.find('.//ArticleTitle')
+        title = ''.join(title_elem.itertext()).strip() if title_elem is not None else ''
+        
+        journal_elem = article.find('.//Journal/Title')
+        journal = journal_elem.text if journal_elem is not None else ''
+        
+        # Extract authors with affiliations
+        author_details = []
+        author_list = article.find('.//AuthorList')
+        if author_list is not None:
+            for author_elem in author_list.findall('Author'):
+                author_info = extract_detailed_author_info(author_elem)
+                author_details.append(author_info)
+        
+        return {
+            'pmid': pmid,
+            'title': title,
+            'journal': journal,
+            'author_details': author_details
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching detailed article {pmid}: {e}")
+        return None
+
+
+def extract_detailed_author_info(author_elem: ET.Element) -> dict:
+    """Extract detailed author information from XML element"""
+    author_info = {
+        'last_name': '',
+        'first_name': '',
+        'initials': '',
+        'affiliations': []
+    }
+    
+    try:
+        last_name = author_elem.find('LastName')
+        if last_name is not None:
+            author_info['last_name'] = last_name.text or ''
+        
+        first_name = author_elem.find('ForeName')
+        if first_name is not None:
+            author_info['first_name'] = first_name.text or ''
+        
+        initials = author_elem.find('Initials')
+        if initials is not None:
+            author_info['initials'] = initials.text or ''
+        
+        # Get affiliations
+        affil_info = author_elem.find('AffiliationInfo')
+        if affil_info is not None:
+            for affil in affil_info.findall('Affiliation'):
+                if affil.text:
+                    author_info['affiliations'].append(affil.text.strip())
+        
+    except Exception:
+        pass
+    
+    return author_info
+
+
+def is_target_author(author_info: dict, target_name: str) -> bool:
+    """Check if author_info matches target author name"""
+    full_name = f"{author_info['first_name']} {author_info['last_name']}".strip().lower()
+    target_lower = target_name.lower()
+    
+    # Simple similarity check
+    return (target_lower in full_name or 
+            full_name in target_lower or
+            author_info['last_name'].lower() in target_lower)
+
+
+def extract_emails_from_text(text: str) -> list:
+    """Extract email addresses from text"""
+    import re
+    email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+    return re.findall(email_pattern, text)
+
+
+def extract_institutional_keywords(affiliations: list) -> list:
+    """Extract common institutional keywords from affiliations"""
+    if not affiliations:
+        return []
+    
+    # Combine all affiliations
+    all_text = ' '.join(affiliations).lower()
+    
+    # Common institutional keywords
+    keywords = []
+    institutional_terms = [
+        'university', 'institute', 'college', 'school', 'center', 'centre',
+        'hospital', 'laboratory', 'department', 'faculty', 'division',
+        'max planck', 'harvard', 'stanford', 'mit', 'cambridge', 'oxford',
+        'excellence cluster', 'cnrs', 'inserm', 'nih'
+    ]
+    
+    for term in institutional_terms:
+        if term in all_text:
+            keywords.append(term)
+    
+    return keywords[:10]  # Return top 10
+
+
+@mcp.tool(
+    annotations={
+        "title": "Search PubMed",
+        "description": (
+            "Search PubMed database for publications by author, DOI, title, or keywords. "
+            "Provides basic article metadata including authors, journal, and publication info. "
+            "Useful for cross-validation with OpenAlex data and discovering name variants."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_pubmed(
+    query: str,
+    search_type: str = "author",
+    max_results: int = 20
+) -> dict:
+    """
+    Search PubMed database for publications.
+    
+    Args:
+        query: Search query (author name, DOI, title, or keywords)
+        search_type: Type of search - "author", "doi", "title", or "keywords" (default: "author")
+        max_results: Maximum number of results to return (default: 20, max: 50)
+        
+    Returns:
+        dict: Search results with PMIDs, article metadata, and summary statistics
+        
+    Example usage:
+        # Search for author
+        search_pubmed("Ivan Matic", search_type="author", max_results=10)
+        
+        # Search by DOI
+        search_pubmed("10.1038/nprot.2009.36", search_type="doi")
+        
+        # Search by keywords
+        search_pubmed("ADP-ribosylation DNA repair", search_type="keywords")
+    """
+    # Validate parameters
+    max_results = min(max(max_results, 1), 50)  # Cap at 50 for performance
+    valid_types = ["author", "doi", "title", "keywords"]
+    if search_type not in valid_types:
+        search_type = "author"
+    
+    logger.info(f"🔍 PubMed search: '{query}' (type: {search_type}, max: {max_results})")
+    
+    result = pubmed_search_core(query, max_results, search_type)
+    return result
+
+
+@mcp.tool(
+    annotations={
+        "title": "PubMed Author Sample",
+        "description": (
+            "Get a detailed sample of works by an author from PubMed including "
+            "institutional affiliations, name variants, and email addresses. "
+            "Useful for cross-validation and institutional disambiguation."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def pubmed_author_sample(
+    author_name: str,
+    sample_size: int = 5
+) -> dict:
+    """
+    Get detailed author sample from PubMed with institutional information.
+    
+    Args:
+        author_name: Author name to search for (e.g., "Ivan Matic", "J Smith")
+        sample_size: Number of recent works to analyze in detail (default: 5, max: 10)
+        
+    Returns:
+        dict: Author analysis including:
+        - total_works: Total number of works found in PubMed
+        - sample_works: Detailed information for sample works
+        - institutional_keywords: Common institutional terms found
+        - name_variants: Different name formats found
+        - email_addresses: Email addresses extracted from affiliations
+        
+    Example usage:
+        # Get institutional profile for author
+        pubmed_author_sample("Ivan Matic", sample_size=5)
+    """
+    # Validate parameters
+    sample_size = min(max(sample_size, 1), 10)  # Cap at 10 for performance
+    
+    logger.info(f"🔍 PubMed author sample: '{author_name}' (sample: {sample_size})")
+    
+    result = get_pubmed_author_sample(author_name, sample_size)
+    return result
+
+
 def main():
     """
     Entry point for the enhanced alex-mcp server with balanced peer-review filtering.
