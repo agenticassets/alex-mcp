@@ -23,6 +23,10 @@ from alex_mcp.data_objects import (
 import pyalex
 import os
 import sys
+import aiohttp
+import asyncio
+import json
+import re
 
 def get_config():
     mailto = os.environ.get("OPENALEX_MAILTO")
@@ -1444,6 +1448,281 @@ async def pubmed_author_sample(
     logger.info(f"🔍 PubMed author sample: '{author_name}' (sample: {sample_size})")
     
     result = get_pubmed_author_sample(author_name, sample_size)
+    return result
+
+
+# ============================================================================
+# ORCID Integration Functions
+# ============================================================================
+
+async def search_orcid_by_name(name: str, affiliation: str = None, max_results: int = 10) -> dict:
+    """
+    Search ORCID by author name and optionally affiliation.
+    
+    Args:
+        name: Author name to search
+        affiliation: Optional affiliation to help disambiguation
+        max_results: Maximum number of results to return
+        
+    Returns:
+        dict: ORCID search results with author profiles
+    """
+    try:
+        # ORCID Public API search endpoint
+        base_url = "https://pub.orcid.org/v3.0/search"
+        
+        # Build search query
+        query_parts = []
+        if name:
+            # Split name into parts for better matching
+            name_parts = name.replace(",", "").split()
+            if len(name_parts) >= 2:
+                # Assume last part is family name, rest are given names
+                family_name = name_parts[-1]
+                given_names = " ".join(name_parts[:-1])
+                query_parts.append(f'family-name:"{family_name}"')
+                query_parts.append(f'given-names:"{given_names}"')
+            else:
+                query_parts.append(f'text:"{name}"')
+        
+        if affiliation:
+            query_parts.append(f'affiliation-org-name:"{affiliation}"')
+        
+        query = " AND ".join(query_parts)
+        
+        params = {
+            'q': query,
+            'rows': min(max_results, 50),  # ORCID API limit
+            'start': 0
+        }
+        
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': f'alex-mcp (+{get_config()["OPENALEX_MAILTO"]})'
+        }
+        
+        logger.info(f"🔍 ORCID search: '{query}' (max: {max_results})")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base_url, params=params, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    results = []
+                    for result in data.get('result', []):
+                        orcid_id = result.get('orcid-identifier', {}).get('path', '')
+                        
+                        # Extract name information
+                        person = result.get('person', {})
+                        names = person.get('name', {})
+                        given_names = names.get('given-names', {}).get('value', '') if names.get('given-names') else ''
+                        family_name = names.get('family-name', {}).get('value', '') if names.get('family-name') else ''
+                        
+                        # Extract employment/affiliation info
+                        employments = []
+                        employment_summaries = result.get('employment-summary', [])
+                        for emp in employment_summaries[:3]:  # Limit to top 3
+                            org_name = emp.get('organization', {}).get('name', '')
+                            if org_name:
+                                employments.append(org_name)
+                        
+                        results.append({
+                            'orcid_id': orcid_id,
+                            'orcid_url': f'https://orcid.org/{orcid_id}' if orcid_id else '',
+                            'given_names': given_names,
+                            'family_name': family_name,
+                            'full_name': f"{given_names} {family_name}".strip(),
+                            'employments': employments,
+                            'relevance_score': result.get('relevance-score', {}).get('value', 0)
+                        })
+                    
+                    logger.info(f"📊 Found {len(results)} ORCID profiles")
+                    
+                    return {
+                        'total_found': data.get('num-found', 0),
+                        'results_returned': len(results),
+                        'results': results
+                    }
+                else:
+                    logger.warning(f"ORCID API error: {response.status}")
+                    return {'total_found': 0, 'results_returned': 0, 'results': [], 'error': f'HTTP {response.status}'}
+                    
+    except Exception as e:
+        logger.error(f"ORCID search error: {str(e)}")
+        return {'total_found': 0, 'results_returned': 0, 'results': [], 'error': str(e)}
+
+
+async def get_orcid_works(orcid_id: str, max_works: int = 20) -> dict:
+    """
+    Get works/publications for a specific ORCID ID.
+    
+    Args:
+        orcid_id: ORCID identifier (e.g., "0000-0000-0000-0000")
+        max_works: Maximum number of works to retrieve
+        
+    Returns:
+        dict: Works information from ORCID profile
+    """
+    try:
+        # Clean ORCID ID (remove URL if present)
+        clean_orcid = orcid_id.replace('https://orcid.org/', '').replace('http://orcid.org/', '')
+        if not re.match(r'^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$', clean_orcid):
+            return {'error': 'Invalid ORCID format', 'works': []}
+        
+        # ORCID Public API works endpoint
+        url = f"https://pub.orcid.org/v3.0/{clean_orcid}/works"
+        
+        headers = {
+            'Accept': 'application/json',
+            'User-Agent': f'alex-mcp (+{get_config()["OPENALEX_MAILTO"]})'
+        }
+        
+        logger.info(f"🔍 Getting ORCID works: {clean_orcid} (max: {max_works})")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    works = []
+                    work_summaries = data.get('group', [])[:max_works]
+                    
+                    for group in work_summaries:
+                        for work_summary in group.get('work-summary', []):
+                            title_info = work_summary.get('title', {})
+                            title = title_info.get('title', {}).get('value', '') if title_info else ''
+                            
+                            journal_title = work_summary.get('journal-title', {}).get('value', '') if work_summary.get('journal-title') else ''
+                            
+                            # Extract publication date
+                            pub_date = work_summary.get('publication-date')
+                            pub_year = ''
+                            if pub_date and pub_date.get('year'):
+                                pub_year = pub_date['year'].get('value', '')
+                            
+                            # Extract external IDs (DOI, PMID, etc.)
+                            external_ids = {}
+                            for ext_id in work_summary.get('external-ids', {}).get('external-id', []):
+                                id_type = ext_id.get('external-id-type', '')
+                                id_value = ext_id.get('external-id-value', '')
+                                if id_type and id_value:
+                                    external_ids[id_type.lower()] = id_value
+                            
+                            works.append({
+                                'title': title,
+                                'journal': journal_title,
+                                'publication_year': pub_year,
+                                'external_ids': external_ids,
+                                'doi': external_ids.get('doi', ''),
+                                'pmid': external_ids.get('pmid', ''),
+                                'type': work_summary.get('type', '')
+                            })
+                    
+                    logger.info(f"📊 Retrieved {len(works)} works from ORCID")
+                    
+                    return {
+                        'orcid_id': clean_orcid,
+                        'total_works': len(works),
+                        'works': works
+                    }
+                else:
+                    logger.warning(f"ORCID works API error: {response.status}")
+                    return {'error': f'HTTP {response.status}', 'works': []}
+                    
+    except Exception as e:
+        logger.error(f"ORCID works error: {str(e)}")
+        return {'error': str(e), 'works': []}
+
+
+# ============================================================================
+# ORCID MCP Tools
+# ============================================================================
+
+@mcp.tool(
+    annotations={
+        "title": "Search ORCID Authors",
+        "description": (
+            "Search ORCID database for author profiles by name and optionally affiliation. "
+            "Provides ORCID IDs, verified names, and institutional affiliations for "
+            "enhanced author disambiguation and verification."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def search_orcid_authors(
+    name: str,
+    affiliation: str = None,
+    max_results: int = 10
+) -> dict:
+    """
+    Search ORCID for author profiles by name and affiliation.
+    
+    Args:
+        name: Author name to search (e.g., "John Smith", "Maria Garcia")
+        affiliation: Optional institutional affiliation for disambiguation
+        max_results: Maximum number of results to return (default: 10, max: 50)
+        
+    Returns:
+        dict: ORCID search results with:
+        - total_found: Total number of matches found
+        - results_returned: Number of results returned
+        - results: List of author profiles with ORCID IDs, names, and affiliations
+        
+    Example usage:
+        # Basic name search
+        search_orcid_authors("John Smith")
+        
+        # Search with affiliation for better disambiguation
+        search_orcid_authors("Maria Garcia", "University of Barcelona")
+    """
+    # Validate parameters
+    max_results = min(max(max_results, 1), 50)  # ORCID API limit
+    
+    result = await search_orcid_by_name(name, affiliation, max_results)
+    return result
+
+
+@mcp.tool(
+    annotations={
+        "title": "Get ORCID Works",
+        "description": (
+            "Retrieve publications/works from a specific ORCID profile. "
+            "Useful for cross-validation with OpenAlex data and verifying "
+            "author publication records."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def get_orcid_publications(
+    orcid_id: str,
+    max_works: int = 20
+) -> dict:
+    """
+    Get publications/works from an ORCID profile.
+    
+    Args:
+        orcid_id: ORCID identifier (e.g., "0000-0000-0000-0000" or full URL)
+        max_works: Maximum number of works to retrieve (default: 20, max: 100)
+        
+    Returns:
+        dict: Publications data with:
+        - orcid_id: Cleaned ORCID identifier
+        - total_works: Number of works found
+        - works: List of publications with titles, journals, DOIs, PMIDs
+        
+    Example usage:
+        # Get works for specific ORCID
+        get_orcid_publications("0000-0000-0000-0000")
+        
+        # Get limited number of works
+        get_orcid_publications("0000-0000-0000-0000", max_works=10)
+    """
+    # Validate parameters
+    max_works = min(max(max_works, 1), 100)  # Reasonable limit
+    
+    result = await get_orcid_works(orcid_id, max_works)
     return result
 
 
