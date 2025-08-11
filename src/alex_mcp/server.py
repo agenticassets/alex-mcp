@@ -15,6 +15,8 @@ from alex_mcp.data_objects import (
     OptimizedWorksSearchResponse,
     OptimizedGeneralWorksSearchResponse,
     OptimizedWorkResult,
+    AutocompleteAuthorCandidate,
+    AutocompleteAuthorsResponse,
     optimize_author_data,
     optimize_work_data
 )
@@ -352,6 +354,80 @@ def search_authors_core(
             query=name,
             total_count=0,
             results=[]
+        )
+
+
+def autocomplete_authors_core(
+    name: str, 
+    context: Optional[str] = None, 
+    limit: int = 5
+) -> AutocompleteAuthorsResponse:
+    """
+    Core function for author autocomplete using PyAlex.
+    
+    Args:
+        name: Author name to search for
+        context: Optional context for better matching (institution, research area, etc.)
+        limit: Maximum number of candidates to return
+        
+    Returns:
+        AutocompleteAuthorsResponse with candidate authors
+    """
+    try:
+        logger.info(f"🔍 Autocompleting authors for: '{name}' (limit: {limit})")
+        if context:
+            logger.info(f"   📝 Context provided: {context}")
+        
+        # Use PyAlex autocomplete for authors
+        results = pyalex.Authors().autocomplete(name)
+        
+        # Limit results
+        results = results[:limit]
+        
+        # Convert to our data model
+        candidates = []
+        for result in results:
+            candidate = AutocompleteAuthorCandidate(
+                openalex_id=result.get('id', ''),
+                display_name=result.get('display_name', ''),
+                institution_hint=result.get('hint'),
+                works_count=result.get('works_count', 0),
+                cited_by_count=result.get('cited_by_count', 0),
+                entity_type=result.get('entity_type', 'author'),
+                external_id=result.get('external_id')
+            )
+            candidates.append(candidate)
+            
+            logger.info(f"   👤 {candidate.display_name} ({candidate.institution_hint or 'No institution'}) - {candidate.works_count} works")
+        
+        response = AutocompleteAuthorsResponse(
+            query=name,
+            context=context,
+            total_candidates=len(candidates),
+            candidates=candidates,
+            search_metadata={
+                'api_used': 'openalex_autocomplete',
+                'has_context': context is not None,
+                'response_time_ms': None  # Could be added with timing
+            }
+        )
+        
+        logger.info(f"✅ Found {len(candidates)} candidates for '{name}'")
+        return response
+        
+    except Exception as e:
+        logger.error(f"❌ Error in autocomplete_authors_core: {e}")
+        # Return empty response on error
+        return AutocompleteAuthorsResponse(
+            query=name,
+            context=context,
+            total_candidates=0,
+            candidates=[],
+            search_metadata={
+                'api_used': 'openalex_autocomplete',
+                'has_context': context is not None,
+                'error': str(e)
+            }
         )
 
 
@@ -763,6 +839,60 @@ async def search_works(
         limit=limit,
         peer_reviewed_only=peer_reviewed_only,
         search_type=search_type
+    )
+    return response.model_dump()
+
+
+@mcp.tool(
+    annotations={
+        "title": "Autocomplete Authors (Smart Disambiguation)",
+        "description": (
+            "Get multiple author candidates using OpenAlex autocomplete API for intelligent disambiguation. "
+            "Returns a ranked list of potential author matches with institutional hints and research metrics. "
+            "Perfect when you need to disambiguate authors and have context like institution, research area, or co-authors. "
+            "The AI can select the best match based on the provided context. "
+            "Much faster than full search (~200ms) and provides multiple options for better accuracy."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def autocomplete_authors(
+    name: str,
+    context: Optional[str] = None, 
+    limit: int = 5
+) -> dict:
+    """
+    Autocomplete authors using OpenAlex API for smart disambiguation.
+    
+    Args:
+        name: Author name to search for (e.g., "James Briscoe", "M. Ralser")
+        context: Optional context to help with disambiguation (e.g., "Francis Crick Institute developmental biology", "Charité Berlin biochemistry")
+        limit: Maximum number of candidates to return (default: 5, max: 10)
+        
+    Returns:
+        dict: Serialized AutocompleteAuthorsResponse with candidate authors, including:
+        - openalex_id: Full OpenAlex author ID
+        - display_name: Author's display name
+        - institution_hint: Current/last known institution 
+        - works_count: Number of published works
+        - cited_by_count: Total citation count
+        - external_id: ORCID or other external identifiers
+        
+    Example usage:
+        # Get candidates for disambiguation
+        candidates = await autocomplete_authors("James Briscoe", context="Francis Crick Institute")
+        
+        # AI can then select the best match based on institutional context
+        # or retrieve recent works for further verification
+    """
+    # Ensure reasonable limits
+    limit = min(max(limit, 1), 10)
+    
+    response = autocomplete_authors_core(
+        name=name,
+        context=context, 
+        limit=limit
     )
     return response.model_dump()
 

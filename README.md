@@ -170,7 +170,52 @@ OPENALEX_MAILTO=your-email@domain.com uvx --from git+https://github.com/drAbreu/
 
 ## 🛠️ Available Tools
 
-### 1. **search_authors**
+### 1. **autocomplete_authors** ⭐ NEW
+Get multiple author candidates using OpenAlex autocomplete API for intelligent disambiguation.
+
+**Parameters:**
+- `name` (required): Author name to search (e.g., "James Briscoe", "M. Ralser")
+- `context` (optional): Context for disambiguation (e.g., "Francis Crick Institute developmental biology")
+- `limit` (optional): Maximum candidates (1-10, default: 5)
+
+**Key Features:**
+- ⚡ **Fast**: ~200ms response time
+- 🎯 **Smart**: Multiple candidates with institutional hints
+- 🧠 **AI-Ready**: Perfect for context-based selection
+- 📊 **Rich**: Works count, citations, institution info
+
+**Streamlined Output:**
+```json
+{
+  "query": "James Briscoe",
+  "context": "Francis Crick Institute",
+  "total_candidates": 3,
+  "candidates": [
+    {
+      "openalex_id": "https://openalex.org/A5019391436",
+      "display_name": "James Briscoe",
+      "institution_hint": "The Francis Crick Institute, UK",
+      "works_count": 415,
+      "cited_by_count": 24623,
+      "external_id": "https://orcid.org/0000-0002-1020-5240"
+    }
+  ]
+}
+```
+
+**Usage Pattern:**
+```python
+# Get multiple candidates for disambiguation
+candidates = await autocomplete_authors(
+    "James Briscoe", 
+    context="Francis Crick Institute developmental biology"
+)
+
+# AI selects best match based on institutional context
+# Much more accurate than single search result!
+```
+
+### 2. **search_authors**
 Search for authors with streamlined output for AI agents.
 
 **Parameters:**

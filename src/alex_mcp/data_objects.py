@@ -127,6 +127,35 @@ class OptimizedGeneralWorksSearchResponse(BaseModel):
     filters: Optional[Dict[str, Any]] = None
 
 
+class AutocompleteAuthorCandidate(BaseModel):
+    """
+    A single author candidate from autocomplete API.
+    
+    Optimized for fast disambiguation with essential context.
+    """
+    openalex_id: str
+    display_name: str
+    institution_hint: Optional[str] = None  # Current/last known institution
+    works_count: int = 0
+    cited_by_count: int = 0
+    entity_type: str = "author"
+    external_id: Optional[str] = None  # ORCID or other external ID
+
+
+class AutocompleteAuthorsResponse(BaseModel):
+    """
+    Response model for author autocomplete with multiple candidates.
+    
+    Enables intelligent disambiguation by providing multiple options
+    with institutional context and research metrics.
+    """
+    query: str
+    context: Optional[str] = None
+    total_candidates: int
+    candidates: List[AutocompleteAuthorCandidate]
+    search_metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 def extract_institution_names(affiliations: List[Dict[str, Any]]) -> tuple[List[str], List[str]]:
     """
     Extract and categorize institution names from OpenAlex affiliation objects.

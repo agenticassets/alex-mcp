@@ -1,4 +1,4 @@
-# OpenAlex Author Disambiguation MCP Server Dependencies
+# OpenAlex + PubMed Hybrid Author Disambiguation MCP Server Dependencies
 # Following MCP best practices with FastMCP
 
 # MCP SDK - Latest version with FastMCP support
@@ -10,4 +10,9 @@ httpx>=0.25.0
 # Optional: For enhanced logging and debugging
 rich>=13.0.0
 
+# OpenAlex API wrapper
 pyalex==0.18
+
+# PubMed API integration
+biopython>=1.83
+requests>=2.31.0
