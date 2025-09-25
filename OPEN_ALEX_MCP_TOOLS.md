@@ -1,0 +1,97 @@
+# Alex-MCP Tool Reference
+
+## OpenAlex Academic Tools
+
+### `autocomplete_authors`
+**Purpose**: Fast author disambiguation with institutional context
+**Parameters**:
+- `name` (str): Author name to search
+- `context` (str, optional): Institutional context for ranking
+- `limit` (int, optional): Max results (1-15, default: 10)
+**Returns**: Ranked author candidates with institution hints, citation counts
+
+### `search_authors`
+**Purpose**: Comprehensive author search with full metadata
+**Parameters**:
+- `name` (str): Author name
+- `institution` (str, optional): Institution filter
+- `topic` (str, optional): Research topic filter
+- `country_code` (str, optional): Country filter
+- `limit` (int, optional): Max results (1-100, default: 20)
+**Returns**: Author profiles with ORCID, affiliations, metrics, research fields
+
+### `retrieve_author_works`
+**Purpose**: Get complete publication history
+**Parameters**:
+- `author_id` (str): OpenAlex author ID
+- `limit` (int, optional): Max results (1-2000, default: all)
+- `order_by` (str, optional): "date" or "citations" (default: "date")
+- `publication_year` (int, optional): Filter by year
+- `type` (str, optional): Work type filter
+**Returns**: Publications with DOIs, journals, citations, topics
+
+### `search_works`
+**Purpose**: Find academic papers by topic
+**Parameters**:
+- `query` (str): Search query
+- `author` (str, optional): Author filter
+- `institution` (str, optional): Institution filter
+- `publication_year` (int, optional): Year filter
+- `type` (str, optional): Work type filter
+- `limit` (int, optional): Max results (1-100, default: 25)
+- `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
+**Returns**: Peer-reviewed papers with full metadata
+
+## ORCID Identity Tools
+
+### `search_orcid_authors`
+**Purpose**: Find researchers by ORCID
+**Parameters**:
+- `name` (str): Author name
+- `affiliation` (str, optional): Institutional affiliation
+- `max_results` (int, optional): Max results (1-50, default: 10)
+**Returns**: ORCID profiles with employment history
+
+### `get_orcid_publications`
+**Purpose**: Get publications from ORCID profile
+**Parameters**:
+- `orcid_id` (str): ORCID identifier
+- `max_works` (int, optional): Max works (1-100, default: 20)
+**Returns**: Complete publication list with DOIs, journals
+
+## Data Structures
+
+### Author Object
+```json
+{
+  "id": "https://openalex.org/A5090973432",
+  "display_name": "Author Name",
+  "orcid": "https://orcid.org/0000-0000-0000-0000",
+  "affiliations": ["Institution Name"],
+  "cited_by_count": 123,
+  "works_count": 45,
+  "h_index": 8,
+  "research_fields": ["Field1", "Field2"]
+}
+```
+
+### Work Object
+```json
+{
+  "id": "https://openalex.org/W4411935046",
+  "title": "Paper Title",
+  "doi": "10.1234/journal.123456",
+  "publication_year": 2024,
+  "cited_by_count": 15,
+  "journal_name": "Journal Name",
+  "is_open_access": true,
+  "primary_field": "Research Field"
+}
+```
+
+## Usage Workflow
+1. Start with `autocomplete_authors` for disambiguation
+2. Use `search_authors` for detailed profiles
+3. Call `retrieve_author_works` for publications
+4. Use `search_works` for topic-based research
+5. Leverage `get_orcid_publications` for verified works
