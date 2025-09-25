@@ -6,7 +6,7 @@
 All function limits can be customized via environment variables in your `mcp.json`:
 - **Hardcoded defaults**: All functions default to **5** results
 - **Environment override**: Set custom defaults via env vars (see examples below)
-- **Parameter override**: Explicit `limit` parameters override both defaults and env vars
+- **Parameter override**: Explicit `limit` parameters override both defaults and env vars (must be numeric)
 
 **Priority**: `Explicit parameter > Environment variable > Hardcoded default (5)`
 
@@ -55,7 +55,7 @@ All function limits can be customized via environment variables in your `mcp.jso
 - `limit` (int, optional): Max results (1-100, default: 5 or env var DEFAULT_SEARCH_WORKS_LIMIT)
 - `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
 - `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
-- `include_abstract` (bool, optional): Include full paper abstracts when available (default: true)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (dynamic default: true for limit ≤ 3, false for limit ≥ 4)
 **Returns**: Peer-reviewed papers with full metadata (optionally includes abstracts)
 
 ### `get_work_by_id`

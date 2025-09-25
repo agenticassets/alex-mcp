@@ -541,7 +541,7 @@ def search_works_core(
     limit: Optional[int] = None,
     peer_reviewed_only: bool = True,
     search_type: str = "general",
-    include_abstract: bool = False
+    include_abstract: Optional[bool] = None
 ) -> OptimizedGeneralWorksSearchResponse:
     """
     Core logic for searching works using OpenAlex with configurable search modes.
@@ -557,7 +557,8 @@ def search_works_core(
         peer_reviewed_only: If True, apply peer-review filters (default: True)
         search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only),
                     or "title_and_abstract" (title and abstract only)
-        include_abstract: If True, include full paper abstracts when available (default: False)
+        include_abstract: If True, include full paper abstracts when available. 
+                         If None (default), automatically set to True for limit ≤ 3, False for limit ≥ 4
 
     Returns:
         OptimizedGeneralWorksSearchResponse: Streamlined response with work data.
@@ -569,6 +570,10 @@ def search_works_core(
             
         # Ensure reasonable limits to control token usage
         limit = min(limit, 100)
+        
+        # Dynamic default for include_abstract based on final limit
+        if include_abstract is None:
+            include_abstract = limit <= 3
         
         # Build the search query using PyAlex based on search_type
         if search_type == "title":
@@ -988,7 +993,7 @@ async def search_works(
     limit: Optional[int] = None,
     peer_reviewed_only: bool = True,
     search_type: str = "general",
-    include_abstract: bool = False
+    include_abstract: Optional[bool] = None
 ) -> dict:
     """
     Optimized MCP tool wrapper for searching works.
@@ -1003,7 +1008,8 @@ async def search_works(
         peer_reviewed_only: If True, apply peer-review filters (default: True)
         search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only),
                     or "title_and_abstract" (title and abstract only)
-        include_abstract: If True, include full paper abstracts when available (default: False)
+        include_abstract: If True, include full paper abstracts when available. 
+                         If None (default), automatically set to True for limit ≤ 3, False for limit ≥ 4
 
     Returns:
         dict: Serialized OptimizedGeneralWorksSearchResponse with streamlined work data.

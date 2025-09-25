@@ -19,10 +19,10 @@ alwaysApply: true
 - `institution` (str, optional): Institution filter
 - `publication_year` (int, optional): Year filter
 - `type` (str, optional): Work type filter
-- `limit` (int, optional): Max results (1-100, default: 5)
+- `limit` (int, optional): Max results (1-100, default: 5) - must be numeric
 - `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
 - `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
-- `include_abstract` (bool, optional): Include full paper abstracts when available (default: true)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (dynamic default: true for limit ≤ 3, false for limit ≥ 4)
 **Returns**: Peer-reviewed papers with full metadata, and optionally abstracts
 
 ### `get_work_by_id`

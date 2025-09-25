@@ -87,9 +87,10 @@ papers = await search_works(
     query="machine learning healthcare",
     limit=15,  # explicit parameter overrides DEFAULT_SEARCH_WORKS_LIMIT
     peer_reviewed_only=True,
-    include_abstract=True  # optional: include full paper abstracts
+    # include_abstract auto-set: True for limit ≤ 3, False for limit ≥ 4
+    # Or explicitly set: include_abstract=True
 )
-# Returns: Peer-reviewed papers with full metadata (optionally includes abstracts)
+# Returns: Peer-reviewed papers with full metadata (abstracts included dynamically)
 ```
 
 #### `get_work_by_id`
@@ -218,7 +219,7 @@ search_works("AI research", limit=50)      # Returns 50 papers (overrides env va
   "journal_name": "Journal of Real Estate Portfolio Management",
   "is_open_access": false,
   "primary_field": "Housing Market and Economics",
-  "abstract": "Full paper abstract (included by default, set include_abstract=false to exclude)"
+  "abstract": "Full paper abstract (auto-included for limit ≤ 3, excluded for limit ≥ 4)"
 }
 ```
 
@@ -257,7 +258,8 @@ pubmed_results = await search_pubmed("cancer immunotherapy")
 ## ⚡ Performance Tips
 
 - **Autocomplete first**: Fastest way to disambiguate authors
-- **Limit results**: Use `limit` parameter to control response size
+- **Limit results**: Use `limit` parameter to control response size and abstract inclusion
+- **Abstract optimization**: Abstracts auto-included for small searches (≤3), excluded for larger ones (≥4)
 - **Filter by year**: Add `publication_year` for recent work
 - **ORCID preferred**: Most reliable for individual researchers
 - **Batch operations**: Process multiple authors efficiently

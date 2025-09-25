@@ -6,12 +6,14 @@ Analyze citation positioning in paper narrative and evidence type (methodologica
 ## OpenAlex MCP Protocol
 
 **Step 1 - Discovery (No Abstracts):**
-- Search: `search_works(query="Author Year key terms", limit=1)`
-- Why: Author + year + keywords reliably identifies works with minimal API overhead
-- Increase the limit if you are having a hard time finding the paper.
+- **Priority 1**: `search_works(query="exact title from bibliography")` - Most reliable for finding exact matches
+- **Priority 2**: `search_works(query="Author Year key terms")` - When title unknown or too long
+- **Priority 3**: DOI-based searches if available: `search_works(query="doi:10.xxxx/xxxxx")`
+- **Note**: Remove `limit=1` parameter - let tool return default results, expand only if needed (limit must be numeric if used)
+- Why: Exact title searches have highest precision; author+year works for disambiguation
 
 **Step 2 - Validation (With Abstracts):**
-- Retrieve: `get_work_by_id(work_id="W123456789")`  # abstracts included by default
+- Retrieve: `get_work_by_id(work_id="W123456789", include_abstract=true)`  # explicitly request abstracts
 - Why: Direct paper retrieval with abstracts enables precise scope alignment and overstatement detection
 - **Note**: Use `get_work_by_id` tool specifically, NOT `get_orcid_publications`
 
@@ -19,12 +21,15 @@ Analyze citation positioning in paper narrative and evidence type (methodologica
 - Recent articles (2020+): 87% have abstracts, good metadata
 - Older articles (2009): Title/author verification possible, abstracts often missing
 - Books/monographs: Poor coverage, require manual verification (KellyXiu2023, DiPasqualeWheaton1996)
+- Working papers: Often not indexed until published
 
-**Search Effectiveness:**
-- ✅ Author + year + keywords → get OpenAlex ID → retrieve with abstracts
+**Search Effectiveness (Revised):**
+- ✅ **Exact title searches** → most reliable for precision matching
+- ✅ Author + year + keywords → good for disambiguation when title unknown
+- ✅ DOI-based searches → reliable when DOI available from bibliography
 - ✅ Direct ID retrieval when OpenAlex work ID known
-- ✅ Title + author + year for precision
-- ❌ DOI searches, vague queries, full titles alone
+- ⚠️ Broad keyword searches → use only as last resort (high false positives)
+- ❌ DOI searches marked as ineffective (actually work well when formatted correctly)
 
 ## Validation Standards
 
