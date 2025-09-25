@@ -11,7 +11,7 @@ Analyze citation positioning in paper narrative and evidence type (methodologica
 - Increase the limit if you are having a hard time finding the paper.
 
 **Step 2 - Validation (With Abstracts):**
-- Retrieve: `get_work_by_id(work_id="W123456789", include_abstract=true)`
+- Retrieve: `get_work_by_id(work_id="W123456789")`  # abstracts included by default
 - Why: Direct paper retrieval with abstracts enables precise scope alignment and overstatement detection
 - **Note**: Use `get_work_by_id` tool specifically, NOT `get_orcid_publications`
 

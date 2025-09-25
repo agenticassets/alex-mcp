@@ -76,7 +76,7 @@ orcid_works = await get_orcid_publications("0000-0002-6124-7440")
 
 **Author**: `id`, `display_name`, `orcid`, `affiliations`, `cited_by_count`, `works_count`, `h_index`
 
-**Work**: `id`, `title`, `doi`, `publication_year`, `cited_by_count`, `journal_name`, `is_open_access`, `abstract` (optional)
+**Work**: `id`, `title`, `doi`, `publication_year`, `cited_by_count`, `journal_name`, `is_open_access`, `abstract` (included by default)
 
 ## Tips
 - Start with `autocomplete_authors` for disambiguation

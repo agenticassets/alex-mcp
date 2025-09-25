@@ -793,7 +793,7 @@ def retrieve_author_works_core(
 
 def get_work_by_id_core(
     work_id: str,
-    include_abstract: bool = False
+    include_abstract: bool = True
 ) -> Optional[OptimizedWorkResult]:
     """
     Core logic to retrieve a single work by its OpenAlex ID.
@@ -801,7 +801,7 @@ def get_work_by_id_core(
 
     Args:
         work_id: OpenAlex work ID (e.g., "W1234567890")
-        include_abstract: If True, include full paper abstract when available (default: False)
+        include_abstract: If True, include full paper abstract when available (default: True)
 
     Returns:
         OptimizedWorkResult: Streamlined work data, or None if not found.
@@ -1044,14 +1044,14 @@ async def search_works(
 )
 async def get_work_by_id(
     work_id: str,
-    include_abstract: bool = False
+    include_abstract: bool = True
 ) -> dict:
     """
     Retrieve a single work by its OpenAlex ID.
 
     Args:
         work_id: OpenAlex work ID (e.g., "W1234567890", "1234567890", or full URL)
-        include_abstract: If True, include full paper abstract when available (default: False)
+        include_abstract: If True, include full paper abstract when available (default: True)
 
     Returns:
         dict: Serialized OptimizedWorkResult with work details, or error if not found.

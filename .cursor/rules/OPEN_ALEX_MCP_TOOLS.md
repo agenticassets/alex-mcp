@@ -41,7 +41,7 @@ All function limits can be customized via environment variables in your `mcp.jso
 - `journal_only` (bool, optional): If True, only return journal articles and letters (default: True)
 - `min_citations` (int, optional): Only return works with at least this many citations
 - `peer_reviewed_only` (bool, optional): If True, apply balanced peer-review filters (default: True)
-- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: true)
 **Returns**: Publications with DOIs, journals, citations, topics (optionally includes abstracts)
 
 ### `search_works`
@@ -55,14 +55,14 @@ All function limits can be customized via environment variables in your `mcp.jso
 - `limit` (int, optional): Max results (1-100, default: 5 or env var DEFAULT_SEARCH_WORKS_LIMIT)
 - `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
 - `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
-- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: true)
 **Returns**: Peer-reviewed papers with full metadata (optionally includes abstracts)
 
 ### `get_work_by_id`
 **Purpose**: Retrieve a single paper by OpenAlex ID
 **Parameters**:
 - `work_id` (str): OpenAlex work ID (accepts "W1234567890", "1234567890", or full URL)
-- `include_abstract` (bool, optional): Include full paper abstract (default: false)
+- `include_abstract` (bool, optional): Include full paper abstract (default: true)
 **Returns**: Single work with complete metadata, DOI, citations, journal info
 **Usage**: `get_work_by_id("W2741809807")` or `get_work_by_id("2741809807")`
 

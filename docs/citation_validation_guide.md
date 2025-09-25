@@ -15,7 +15,7 @@ search_works(query="Author Year key terms", limit=1)
 ### Step 2: Validation (With Abstracts)
 ```python
 # Get full details for content verification
-get_work_by_id(work_id="W123456789", include_abstract=true)
+get_work_by_id(work_id="W123456789")  # abstracts included by default
 ```
 **Why?** Direct paper retrieval with abstracts enables precise scope alignment and overstatement detection.
 **Note:** Use `get_work_by_id` tool specifically, NOT `get_orcid_publications`.

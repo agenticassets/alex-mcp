@@ -97,7 +97,7 @@ papers = await search_works(
 ```python
 paper = await get_work_by_id(
     work_id="W2741809807",  # accepts "W1234567890", "1234567890", or full URL
-    include_abstract=True  # optional: include full paper abstract
+    include_abstract=False  # optional: exclude full paper abstract (included by default)
 )
 # Returns: Single work with complete metadata, DOI, citations, journal info
 ```
@@ -218,7 +218,7 @@ search_works("AI research", limit=50)      # Returns 50 papers (overrides env va
   "journal_name": "Journal of Real Estate Portfolio Management",
   "is_open_access": false,
   "primary_field": "Housing Market and Economics",
-  "abstract": "Full paper abstract (when include_abstract=true)"
+  "abstract": "Full paper abstract (included by default, set include_abstract=false to exclude)"
 }
 ```
 
