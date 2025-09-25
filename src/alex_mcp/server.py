@@ -522,7 +522,8 @@ def search_works_core(
     type: Optional[str] = None,
     limit: int = 25,
     peer_reviewed_only: bool = True,
-    search_type: str = "general"
+    search_type: str = "general",
+    include_abstract: bool = False
 ) -> OptimizedGeneralWorksSearchResponse:
     """
     Core logic for searching works using OpenAlex with configurable search modes.
@@ -536,8 +537,9 @@ def search_works_core(
         type: (Optional) Work type filter (e.g., "article", "letter")
         limit: Maximum number of results (default: 25, max: 100)
         peer_reviewed_only: If True, apply peer-review filters (default: True)
-        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only), 
+        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only),
                     or "title_and_abstract" (title and abstract only)
+        include_abstract: If True, include full paper abstracts when available (default: False)
 
     Returns:
         OptimizedGeneralWorksSearchResponse: Streamlined response with work data.
@@ -604,7 +606,7 @@ def search_works_core(
         optimized_works = []
         for work in results:
             try:
-                optimized_work = optimize_work_data(work)
+                optimized_work = optimize_work_data(work, include_abstract=include_abstract)
                 optimized_works.append(optimized_work)
             except Exception as e:
                 logger.warning(f"Error optimizing work data: {e}")
@@ -638,6 +640,7 @@ def retrieve_author_works_core(
     journal_only: bool = True,  # Default to True for peer-reviewed content
     min_citations: Optional[int] = None,
     peer_reviewed_only: bool = True,  # Default to True
+    include_abstract: bool = False
 ) -> OptimizedWorksSearchResponse:
     """
     Enhanced core logic to retrieve peer-reviewed works for a given OpenAlex Author ID.
@@ -736,7 +739,7 @@ def retrieve_author_works_core(
         optimized_works = []
         for work_data in works:
             try:
-                optimized_work = optimize_work_data(work_data)
+                optimized_work = optimize_work_data(work_data, include_abstract=include_abstract)
                 optimized_works.append(optimized_work)
             except Exception as e:
                 logger.warning(f"Error optimizing work data: {e}")
@@ -829,6 +832,7 @@ async def retrieve_author_works(
     journal_only: bool = True,
     min_citations: Optional[int] = None,
     peer_reviewed_only: bool = True,
+    include_abstract: bool = False
 ) -> dict:
     """
     Enhanced MCP tool wrapper for retrieving author works with flexible filtering.
@@ -842,6 +846,7 @@ async def retrieve_author_works(
         journal_only: If True, only return journal articles and letters (default: True)
         min_citations: Only return works with at least this many citations
         peer_reviewed_only: If True, apply balanced peer-review filters (default: True)
+        include_abstract: If True, include full paper abstracts when available (default: False)
 
     Returns:
         dict: Serialized OptimizedWorksSearchResponse with author's works.
@@ -874,6 +879,7 @@ async def retrieve_author_works(
         journal_only=journal_only,
         min_citations=min_citations,
         peer_reviewed_only=peer_reviewed_only,
+        include_abstract=include_abstract,
     )
     return response.model_dump()
 
@@ -901,7 +907,8 @@ async def search_works(
     type: Optional[str] = None,
     limit: int = 25,
     peer_reviewed_only: bool = True,
-    search_type: str = "general"
+    search_type: str = "general",
+    include_abstract: bool = False
 ) -> dict:
     """
     Optimized MCP tool wrapper for searching works.
@@ -914,8 +921,9 @@ async def search_works(
         type: (Optional) Work type filter (e.g., "article", "letter")
         limit: Maximum number of results (default: 25, max: 100)
         peer_reviewed_only: If True, apply peer-review filters (default: True)
-        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only), 
+        search_type: Search mode - "general" (title/abstract/fulltext), "title" (title only),
                     or "title_and_abstract" (title and abstract only)
+        include_abstract: If True, include full paper abstracts when available (default: False)
 
     Returns:
         dict: Serialized OptimizedGeneralWorksSearchResponse with streamlined work data.
@@ -931,7 +939,8 @@ async def search_works(
         type=type,
         limit=limit,
         peer_reviewed_only=peer_reviewed_only,
-        search_type=search_type
+        search_type=search_type,
+        include_abstract=include_abstract
     )
     return response.model_dump()
 

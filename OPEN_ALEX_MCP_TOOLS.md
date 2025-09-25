@@ -1,5 +1,7 @@
 # Alex-MCP Tool Reference
 
+**Note**: Requires `OPENALEX_MAILTO` environment variable set to your email address for OpenAlex API access.
+
 ## OpenAlex Academic Tools
 
 ### `autocomplete_authors`
@@ -28,7 +30,11 @@
 - `order_by` (str, optional): "date" or "citations" (default: "date")
 - `publication_year` (int, optional): Filter by year
 - `type` (str, optional): Work type filter
-**Returns**: Publications with DOIs, journals, citations, topics
+- `journal_only` (bool, optional): If True, only return journal articles and letters (default: True)
+- `min_citations` (int, optional): Only return works with at least this many citations
+- `peer_reviewed_only` (bool, optional): If True, apply balanced peer-review filters (default: True)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+**Returns**: Publications with DOIs, journals, citations, topics (optionally includes abstracts)
 
 ### `search_works`
 **Purpose**: Find academic papers by topic
@@ -40,7 +46,9 @@
 - `type` (str, optional): Work type filter
 - `limit` (int, optional): Max results (1-100, default: 25)
 - `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
-**Returns**: Peer-reviewed papers with full metadata
+- `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+**Returns**: Peer-reviewed papers with full metadata (optionally includes abstracts)
 
 ## ORCID Identity Tools
 
@@ -85,7 +93,8 @@
   "cited_by_count": 15,
   "journal_name": "Journal Name",
   "is_open_access": true,
-  "primary_field": "Research Field"
+  "primary_field": "Research Field",
+  "abstract": "Full paper abstract text..."
 }
 ```
 

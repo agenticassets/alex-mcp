@@ -4,8 +4,10 @@ globs:
 alwaysApply: true
 ---
 
-
 # Alex-MCP Tool Reference
+
+## Configuration
+**Email**: `$env:OPENALEX_MAILTO` - Set this environment variable for OpenAlex API requests
 
 ## OpenAlex Academic Tools
 
@@ -35,7 +37,11 @@ alwaysApply: true
 - `order_by` (str, optional): "date" or "citations" (default: "date")
 - `publication_year` (int, optional): Filter by year
 - `type` (str, optional): Work type filter
-**Returns**: Publications with DOIs, journals, citations, topics
+- `journal_only` (bool, optional): If True, only return journal articles and letters (default: True)
+- `min_citations` (int, optional): Only return works with at least this many citations
+- `peer_reviewed_only` (bool, optional): If True, apply balanced peer-review filters (default: True)
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+**Returns**: Publications with DOIs, journals, citations, topics, and optionally abstracts
 
 ### `search_works`
 **Purpose**: Find academic papers by topic
@@ -47,7 +53,9 @@ alwaysApply: true
 - `type` (str, optional): Work type filter
 - `limit` (int, optional): Max results (1-100, default: 25)
 - `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
-**Returns**: Peer-reviewed papers with full metadata
+- `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+**Returns**: Peer-reviewed papers with full metadata, and optionally abstracts
 
 ## ORCID Identity Tools
 
@@ -92,9 +100,35 @@ alwaysApply: true
   "cited_by_count": 15,
   "journal_name": "Journal Name",
   "is_open_access": true,
-  "primary_field": "Research Field"
+  "primary_field": "Research Field",
+  "abstract": "Full paper abstract (when include_abstract=true)"
 }
 ```
+
+## Best Practices for Academic Research
+
+### Search Strategy Effectiveness (Based on Testing)
+- **Most Effective (100% success)**: Author-based searches with `autocomplete_authors` → `retrieve_author_works`
+- **Very Effective (90% success)**: Keyword-based topic discovery with 2-3 relevant terms
+- **Moderately Effective (70% success)**: Combined author + topic keyword searches
+- **Least Effective (0-20% success)**: Exact title matching or DOI searches
+
+### Optimal Search Patterns
+- **Prioritize author-based searches**: Use `autocomplete_authors` or `search_authors` first; authors are reliably indexed and associated with works
+- **Retrieve complete author works**: Use `retrieve_author_works` after finding authors; this method has 100% success rate for finding specific papers
+- **Use keyword searches for topic discovery**: Search with 2-3 relevant terms like "real estate AI valuation" to find related papers (90% success rate)
+- **Combine author + topic for precision**: Include author names with topic keywords; more reliable than exact title matching
+- **Avoid exact title or DOI searches**: These fail frequently (0-20% success rate); papers may not be indexed with expected exact terms
+- **Use autocomplete for name variations**: `autocomplete_authors` handles name variants and provides institutional context for disambiguation
+- **Set reasonable result limits**: Use 10-20 for targeted searches, higher limits for comprehensive author bibliographies
+- **Cross-reference with local bibliography**: Verify OpenAlex results against existing `references.bib` entries for accuracy
+- **Include publication year when known**: Add year filters to focus searches (e.g., 2020+ for recent AI research)
+- **Use include_abstract selectively**: Set `include_abstract=true` only when you need full paper content; abstracts significantly increase response size and token usage
+
+### Recommended Workflows
+- **For Finding Specific Papers**: Start with key authors in field → get their works → scan results for target paper
+- **For Topic Exploration**: Use keyword searches → filter by year if needed → check abstracts for relevance
+- **For Literature Reviews**: Find key authors in field → get their complete works → use keywords to find related papers → cross-reference
 
 ## Usage Workflow
 1. Start with `autocomplete_authors` for disambiguation

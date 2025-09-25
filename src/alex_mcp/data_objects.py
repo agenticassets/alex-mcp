@@ -7,9 +7,12 @@ and work retrieval while minimizing token usage. Enhanced to preserve comprehens
 ID information (DOI, PMID, PMCID, OpenAlex, MAG).
 """
 
+import logging
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class WorkIDs(BaseModel):
@@ -92,6 +95,9 @@ class OptimizedWorkResult(BaseModel):
     # Research categorization (simplified)
     primary_field: Optional[str] = None
     concepts: Optional[List[str]] = None
+
+    # Abstract (when available)
+    abstract: Optional[str] = None
 
 
 class OptimizedSearchResponse(BaseModel):
@@ -380,7 +386,45 @@ def optimize_author_data(author_data: Dict[str, Any]) -> OptimizedAuthorResult:
     )
 
 
-def optimize_work_data(work_data: Dict[str, Any]) -> OptimizedWorkResult:
+def invert_abstract_index(inverted_index: Dict[str, List[int]]) -> str:
+    """
+    Convert OpenAlex inverted index to plain text abstract.
+
+    Args:
+        inverted_index: Dict where keys are words and values are lists of positions
+
+    Returns:
+        Plain text abstract string
+    """
+    if not inverted_index:
+        return ""
+
+    try:
+        # Find the maximum position to determine array size
+        max_pos = 0
+        for positions in inverted_index.values():
+            if positions:
+                max_pos = max(max_pos, max(positions))
+
+        # Create array to hold words at their positions
+        words = [None] * (max_pos + 1)
+
+        # Place each word at its positions
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                if pos < len(words):
+                    words[pos] = word
+
+        # Join words, filtering out None values
+        text_words = [w for w in words if w is not None]
+        return " ".join(text_words)
+
+    except Exception as e:
+        logger.warning(f"Error converting abstract inverted index: {e}")
+        return ""
+
+
+def optimize_work_data(work_data: Dict[str, Any], include_abstract: bool = False) -> OptimizedWorkResult:
     """
     Convert full OpenAlex work object to optimized version.
     
@@ -420,21 +464,34 @@ def optimize_work_data(work_data: Dict[str, Any]) -> OptimizedWorkResult:
     # Research categorization
     primary_topic = work_data.get('primary_topic', {})
     primary_field = primary_topic.get('display_name') if primary_topic else None
-    
+
     # Simplified concepts (top 3)
     concepts = work_data.get('concepts', [])
     concept_names = []
     if concepts:
         sorted_concepts = sorted(concepts, key=lambda x: x.get('score', 0), reverse=True)
         concept_names = [c.get('display_name') for c in sorted_concepts[:3] if c.get('display_name')]
-    
+
+    # Abstract extraction (optional, only when requested)
+    abstract = None
+    if include_abstract:
+        logger.info(f"Including abstract for work {work_id}")
+        abstract_inverted_index = work_data.get('abstract_inverted_index')
+        if abstract_inverted_index:
+            abstract = invert_abstract_index(abstract_inverted_index)
+            logger.info(f"Abstract extracted, length: {len(abstract) if abstract else 0}")
+        else:
+            logger.info("No abstract_inverted_index found")
+    else:
+        logger.info(f"Skipping abstract for work {work_id} (include_abstract=False)")
+
     return OptimizedWorkResult(
         id=work_id,
         title=title,
-        doi=doi,  
+        doi=doi,
         publication_year=publication_year,
         type=work_type,
-        ids=comprehensive_ids,  
+        ids=comprehensive_ids,
         cited_by_count=cited_by_count,
         journal_name=journal_name,
         journal_issn=journal_issn,
@@ -444,5 +501,6 @@ def optimize_work_data(work_data: Dict[str, Any]) -> OptimizedWorkResult:
         first_author=first_author,
         corresponding_author=corresponding_author,
         primary_field=primary_field,
-        concepts=concept_names if concept_names else None
+        concepts=concept_names if concept_names else None,
+        abstract=abstract
     )

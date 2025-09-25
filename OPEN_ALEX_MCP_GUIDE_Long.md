@@ -64,9 +64,10 @@ authors = await search_authors(
 works = await retrieve_author_works(
     author_id="https://openalex.org/A5090973432",
     limit=20,
-    order_by="citations"  # or "date"
+    order_by="citations",  # or "date"
+    include_abstract=True  # optional: include full paper abstracts
 )
-# Returns: Publications with DOIs, journals, citations, topics
+# Returns: Publications with DOIs, journals, citations, topics (optionally includes abstracts)
 ```
 
 #### `search_works`
@@ -75,9 +76,10 @@ works = await retrieve_author_works(
 papers = await search_works(
     query="machine learning healthcare",
     limit=15,
-    peer_reviewed_only=True
+    peer_reviewed_only=True,
+    include_abstract=True  # optional: include full paper abstracts
 )
-# Returns: Peer-reviewed papers with full metadata
+# Returns: Peer-reviewed papers with full metadata (optionally includes abstracts)
 ```
 
 ### Medical Research (PubMed)
@@ -152,7 +154,8 @@ publications = await get_orcid_publications(
   "cited_by_count": 0,
   "journal_name": "Journal of Real Estate Portfolio Management",
   "is_open_access": false,
-  "primary_field": "Housing Market and Economics"
+  "primary_field": "Housing Market and Economics",
+  "abstract": "Full paper abstract (when include_abstract=true)"
 }
 ```
 

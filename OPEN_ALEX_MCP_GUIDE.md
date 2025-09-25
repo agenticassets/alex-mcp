@@ -1,25 +1,26 @@
 # Alex-MCP Quick Guide
 
 ## Setup (Windows/Cursor AI)
-```bash
-git clone https://github.com/drAbreu/alex-mcp.git
-cd alex-mcp
-python -m venv venv
-venv\Scripts\activate
-pip install -e .
+**Note**: Requires `$env:OPENALEX_MAILTO` environment variable set to your email address for OpenAlex API access.
+
+**1. Set Environment Variable** (Required):
+```powershell
+$env:OPENALEX_MAILTO = "your-email@domain.com"
 ```
 
-**Cursor AI Config** (`mcp.json`):
+**2. Cursor AI Config** (`mcp.json`):
 ```json
 {
   "mcpServers": {
     "alex-mcp": {
       "command": "C:/path/to/alex-mcp/venv/Scripts/alex-mcp.exe",
-      "env": {"OPENALEX_MAILTO": "your-email@domain.com"}
+      "env": {"OPENALEX_MAILTO": "$env:OPENALEX_MAILTO"}
     }
   }
 }
 ```
+
+**Note**: Set `$env:OPENALEX_MAILTO` in your PowerShell session before using Cursor AI.
 
 ## 8 Tools
 
@@ -63,7 +64,7 @@ orcid_works = await get_orcid_publications("0000-0002-6124-7440")
 
 **Author**: `id`, `display_name`, `orcid`, `affiliations`, `cited_by_count`, `works_count`, `h_index`
 
-**Work**: `id`, `title`, `doi`, `publication_year`, `cited_by_count`, `journal_name`, `is_open_access`
+**Work**: `id`, `title`, `doi`, `publication_year`, `cited_by_count`, `journal_name`, `is_open_access`, `abstract` (optional)
 
 ## Tips
 - Start with `autocomplete_authors` for disambiguation
