@@ -14,11 +14,19 @@ $env:OPENALEX_MAILTO = "your-email@domain.com"
   "mcpServers": {
     "alex-mcp": {
       "command": "C:/path/to/alex-mcp/venv/Scripts/alex-mcp.exe",
-      "env": {"OPENALEX_MAILTO": "$env:OPENALEX_MAILTO"}
+      "env": {
+        "OPENALEX_MAILTO": "$env:OPENALEX_MAILTO",
+        "DEFAULT_SEARCH_AUTHORS_LIMIT": "10",
+        "DEFAULT_SEARCH_WORKS_LIMIT": "15",
+        "DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT": "8",
+        "DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT": "20"
+      }
     }
   }
 }
 ```
+
+**🔧 Configurable Defaults**: All functions default to **5** results, but you can customize via environment variables in `mcp.json` (see above). Explicit `limit` parameters always override defaults.
 
 **Note**: Set `$env:OPENALEX_MAILTO` in your PowerShell session before using Cursor AI.
 
@@ -69,7 +77,31 @@ orcid_works = await get_orcid_publications("0000-0002-6124-7440")
 ## Tips
 - Start with `autocomplete_authors` for disambiguation
 - Use ORCID IDs for precision
-- Set `limit` to control response size
+- **Defaults**: All functions return **5** results by default
+- **Custom limits**: Set environment variables in `mcp.json` to change defaults
+- **Override**: Use explicit `limit` parameters to override both defaults and env vars
 - Required: `OPENALEX_MAILTO` environment variable
+
+## Default Configuration Examples
+
+**Without custom env vars** (hardcoded defaults):
+```python
+search_authors("John Smith")        # Returns 5 authors
+search_works("AI research")         # Returns 5 papers
+autocomplete_authors("Jane Doe")    # Returns 5 candidates
+```
+
+**With custom env vars** (from mcp.json above):
+```python
+search_authors("John Smith")        # Returns 10 authors (from DEFAULT_SEARCH_AUTHORS_LIMIT)
+search_works("AI research")         # Returns 15 papers (from DEFAULT_SEARCH_WORKS_LIMIT)
+autocomplete_authors("Jane Doe")    # Returns 8 candidates (from DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT)
+```
+
+**With explicit parameters** (always wins):
+```python
+search_authors("John Smith", limit=25)     # Returns 25 authors (overrides env var)
+search_works("AI research", limit=50)      # Returns 50 papers (overrides env var)
+```
 
 ## Status: ✅ All 8 tools operational (<500ms)

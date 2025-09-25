@@ -19,12 +19,22 @@ Add to your `mcp.json`:
     "alex-mcp": {
       "command": "C:/path/to/alex-mcp/venv/Scripts/alex-mcp.exe",
       "env": {
-        "OPENALEX_MAILTO": "your-email@domain.com"
+        "OPENALEX_MAILTO": "your-email@domain.com",
+        "DEFAULT_SEARCH_AUTHORS_LIMIT": "10",
+        "DEFAULT_SEARCH_WORKS_LIMIT": "15",
+        "DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT": "8",
+        "DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT": "20",
+        "DEFAULT_PUBMED_SEARCH_LIMIT": "12",
+        "DEFAULT_PUBMED_SAMPLE_SIZE": "7",
+        "DEFAULT_ORCID_SEARCH_LIMIT": "6",
+        "DEFAULT_ORCID_WORKS_LIMIT": "25"
       }
     }
   }
 }
 ```
+
+**🔧 Configurable Defaults**: All functions default to **5** results, but you can customize via environment variables above. Explicit `limit` parameters always override defaults.
 
 ### 3. Environment Setup
 ```bash
@@ -41,8 +51,8 @@ export OPENALEX_MAILTO=your-email@domain.com
 # Best for initial author searches
 candidates = await autocomplete_authors(
     "John Smith",
-    context="Harvard University",
-    limit=5
+    context="Harvard University"
+    # Uses DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT (8) from mcp.json
 )
 # Returns: Ranked candidates with institution hints, citation counts
 ```
@@ -52,8 +62,8 @@ candidates = await autocomplete_authors(
 ```python
 authors = await search_authors(
     name="Cayman Seagraves",
-    institution="University of Tulsa",
-    limit=10
+    institution="University of Tulsa"
+    # Uses DEFAULT_SEARCH_AUTHORS_LIMIT (10) from mcp.json
 )
 # Returns: ORCID, affiliations, citation metrics, research fields
 ```
@@ -63,7 +73,7 @@ authors = await search_authors(
 ```python
 works = await retrieve_author_works(
     author_id="https://openalex.org/A5090973432",
-    limit=20,
+    limit=20,  # explicit parameter overrides DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT
     order_by="citations",  # or "date"
     include_abstract=True  # optional: include full paper abstracts
 )
@@ -75,7 +85,7 @@ works = await retrieve_author_works(
 ```python
 papers = await search_works(
     query="machine learning healthcare",
-    limit=15,
+    limit=15,  # explicit parameter overrides DEFAULT_SEARCH_WORKS_LIMIT
     peer_reviewed_only=True,
     include_abstract=True  # optional: include full paper abstracts
 )
@@ -126,6 +136,49 @@ publications = await get_orcid_publications(
     max_works=20
 )
 # Returns: Complete publication list with DOIs
+```
+
+## 🔧 Configuration System
+
+### Default Limits
+All functions have **hardcoded defaults of 5 results** but can be customized via environment variables:
+
+| Function | Default | Environment Variable |
+|----------|---------|---------------------|
+| `search_authors` | 5 | `DEFAULT_SEARCH_AUTHORS_LIMIT` |
+| `search_works` | 5 | `DEFAULT_SEARCH_WORKS_LIMIT` |
+| `autocomplete_authors` | 5 | `DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT` |
+| `retrieve_author_works` | 5 | `DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT` |
+| `search_pubmed` | 5 | `DEFAULT_PUBMED_SEARCH_LIMIT` |
+| `pubmed_author_sample` | 5 | `DEFAULT_PUBMED_SAMPLE_SIZE` |
+| `search_orcid_authors` | 5 | `DEFAULT_ORCID_SEARCH_LIMIT` |
+| `get_orcid_publications` | 5 | `DEFAULT_ORCID_WORKS_LIMIT` |
+
+### Priority System
+```
+Explicit parameter > Environment variable > Hardcoded default (5)
+```
+
+### Configuration Examples
+
+**Without custom env vars** (hardcoded defaults):
+```python
+search_authors("John Smith")        # Returns 5 authors
+search_works("AI research")         # Returns 5 papers
+autocomplete_authors("Jane Doe")    # Returns 5 candidates
+```
+
+**With custom env vars** (from mcp.json above):
+```python
+search_authors("John Smith")        # Returns 10 authors (from DEFAULT_SEARCH_AUTHORS_LIMIT)
+search_works("AI research")         # Returns 15 papers (from DEFAULT_SEARCH_WORKS_LIMIT)
+autocomplete_authors("Jane Doe")    # Returns 8 candidates (from DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT)
+```
+
+**With explicit parameters** (always wins):
+```python
+search_authors("John Smith", limit=25)     # Returns 25 authors (overrides env var)
+search_works("AI research", limit=50)      # Returns 50 papers (overrides env var)
 ```
 
 ## 📊 Data Structure
@@ -212,7 +265,17 @@ pubmed_results = await search_pubmed("cancer immunotherapy")
 # Required
 OPENALEX_MAILTO=your-email@domain.com
 
-# Optional
+# Optional - Default Limits (all default to 5 if not set)
+DEFAULT_SEARCH_AUTHORS_LIMIT=10
+DEFAULT_SEARCH_WORKS_LIMIT=15
+DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT=8
+DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT=20
+DEFAULT_PUBMED_SEARCH_LIMIT=12
+DEFAULT_PUBMED_SAMPLE_SIZE=7
+DEFAULT_ORCID_SEARCH_LIMIT=6
+DEFAULT_ORCID_WORKS_LIMIT=25
+
+# Optional - System Configuration
 OPENALEX_MAX_AUTHORS=100
 OPENALEX_USER_AGENT=research-agent-v1.0
 ```

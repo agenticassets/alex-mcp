@@ -54,6 +54,16 @@ def get_config():
         "OPENALEX_NO_FUNDING_DATA": os.environ.get("OPENALEX_NO_FUNDING_DATA", "true").lower() == "true",
         "OPENALEX_MISSING_CORRESPONDING_AUTHORS": os.environ.get("OPENALEX_MISSING_CORRESPONDING_AUTHORS", "true").lower() == "true",
         "OPENALEX_PARTIAL_ABSTRACTS": os.environ.get("OPENALEX_PARTIAL_ABSTRACTS", "true").lower() == "true",
+        
+        # Configurable default limits
+        "DEFAULT_SEARCH_AUTHORS_LIMIT": int(os.environ.get("DEFAULT_SEARCH_AUTHORS_LIMIT", 5)),
+        "DEFAULT_SEARCH_WORKS_LIMIT": int(os.environ.get("DEFAULT_SEARCH_WORKS_LIMIT", 5)),
+        "DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT": int(os.environ.get("DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT", 5)),
+        "DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT": int(os.environ.get("DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT", 5)),
+        "DEFAULT_PUBMED_SEARCH_LIMIT": int(os.environ.get("DEFAULT_PUBMED_SEARCH_LIMIT", 5)),
+        "DEFAULT_PUBMED_SAMPLE_SIZE": int(os.environ.get("DEFAULT_PUBMED_SAMPLE_SIZE", 5)),
+        "DEFAULT_ORCID_SEARCH_LIMIT": int(os.environ.get("DEFAULT_ORCID_SEARCH_LIMIT", 5)),
+        "DEFAULT_ORCID_WORKS_LIMIT": int(os.environ.get("DEFAULT_ORCID_WORKS_LIMIT", 5)),
     }
 
 # Configure logging
@@ -297,7 +307,7 @@ def search_authors_core(
     institution: Optional[str] = None,
     topic: Optional[str] = None,
     country_code: Optional[str] = None,
-    limit: int = 15  # Reduced default limit
+    limit: Optional[int] = None
 ) -> OptimizedSearchResponse:
     """
     Optimized core logic for searching authors using OpenAlex.
@@ -314,6 +324,10 @@ def search_authors_core(
         OptimizedSearchResponse: Streamlined response with essential author data.
     """
     try:
+        # Use config default if limit not provided
+        if limit is None:
+            limit = config["DEFAULT_SEARCH_AUTHORS_LIMIT"]
+        
         # Build query
         query = pyalex.Authors().search_filter(display_name=name)
         
@@ -364,7 +378,7 @@ def search_authors_core(
 def autocomplete_authors_core(
     name: str, 
     context: Optional[str] = None, 
-    limit: int = 10,
+    limit: Optional[int] = None,
     filter_no_institution: bool = True,
     enable_institution_ranking: bool = True
 ) -> AutocompleteAuthorsResponse:
@@ -382,6 +396,10 @@ def autocomplete_authors_core(
         AutocompleteAuthorsResponse with filtered and ranked candidate authors
     """
     try:
+        # Use config default if limit not provided
+        if limit is None:
+            limit = config["DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT"]
+            
         logger.info(f"🔍 Autocompleting authors for: '{name}' (limit: {limit})")
         if context:
             logger.info(f"   📝 Context provided: {context}")
@@ -520,7 +538,7 @@ def search_works_core(
     institution: Optional[str] = None,
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
-    limit: int = 25,
+    limit: Optional[int] = None,
     peer_reviewed_only: bool = True,
     search_type: str = "general",
     include_abstract: bool = False
@@ -545,6 +563,10 @@ def search_works_core(
         OptimizedGeneralWorksSearchResponse: Streamlined response with work data.
     """
     try:
+        # Use config default if limit not provided
+        if limit is None:
+            limit = config["DEFAULT_SEARCH_WORKS_LIMIT"]
+            
         # Ensure reasonable limits to control token usage
         limit = min(limit, 100)
         
@@ -633,7 +655,7 @@ def search_works_core(
 
 def retrieve_author_works_core(
     author_id: str,
-    limit: int = 20_000,  # High default limit for comprehensive analysis
+    limit: Optional[int] = None,
     order_by: str = "date",  # "date" or "citations"
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
@@ -661,6 +683,10 @@ def retrieve_author_works_core(
         OptimizedWorksSearchResponse: Streamlined response with peer-reviewed work data.
     """
     try:
+        # Use config default if limit not provided
+        if limit is None:
+            limit = config["DEFAULT_RETRIEVE_AUTHOR_WORKS_LIMIT"]
+            
         limit = min(limit, 20_000)
         
         # Build base filters
@@ -782,7 +808,7 @@ async def search_authors(
     institution: Optional[str] = None,
     topic: Optional[str] = None,
     country_code: Optional[str] = None,
-    limit: int = 15
+    limit: Optional[int] = None
 ) -> dict:
     """
     Optimized MCP tool wrapper for searching authors.
@@ -797,6 +823,10 @@ async def search_authors(
     Returns:
         dict: Serialized OptimizedSearchResponse with streamlined author data.
     """
+    # Use config default if limit not provided
+    if limit is None:
+        limit = config["DEFAULT_SEARCH_AUTHORS_LIMIT"]
+        
     # Ensure reasonable limits to control token usage
     limit = min(limit, 100)  # Increased for comprehensive author search
     
@@ -905,7 +935,7 @@ async def search_works(
     institution: Optional[str] = None,
     publication_year: Optional[int] = None,
     type: Optional[str] = None,
-    limit: int = 25,
+    limit: Optional[int] = None,
     peer_reviewed_only: bool = True,
     search_type: str = "general",
     include_abstract: bool = False
@@ -928,6 +958,10 @@ async def search_works(
     Returns:
         dict: Serialized OptimizedGeneralWorksSearchResponse with streamlined work data.
     """
+    # Use config default if limit not provided
+    if limit is None:
+        limit = config["DEFAULT_SEARCH_WORKS_LIMIT"]
+        
     # Ensure reasonable limits to control token usage
     limit = min(limit, 100)
     
@@ -962,7 +996,7 @@ async def search_works(
 async def autocomplete_authors(
     name: str,
     context: Optional[str] = None, 
-    limit: int = 10,
+    limit: Optional[int] = None,
     filter_no_institution: bool = True,
     enable_institution_ranking: bool = True
 ) -> dict:
@@ -999,6 +1033,10 @@ async def autocomplete_authors(
         - Higher default limit (10 vs 5) for better candidate coverage
         - Detailed logging for debugging and optimization
     """
+    # Use config default if limit not provided
+    if limit is None:
+        limit = config["DEFAULT_AUTOCOMPLETE_AUTHORS_LIMIT"]
+        
     # Ensure reasonable limits - increased max to 15
     limit = min(max(limit, 1), 15)
     
@@ -1019,7 +1057,7 @@ from typing import Union
 
 def pubmed_search_core(
     query: str,
-    max_results: int = 20,
+    max_results: Optional[int] = None,
     search_type: str = "author"
 ) -> dict:
     """
@@ -1036,6 +1074,10 @@ def pubmed_search_core(
     base_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
     
     try:
+        # Use config default if max_results not provided
+        if max_results is None:
+            max_results = config["DEFAULT_PUBMED_SEARCH_LIMIT"]
+            
         # Format search term based on type
         if search_type == "author":
             search_term = f'"{query}"[Author]'
@@ -1381,7 +1423,7 @@ def extract_institutional_keywords(affiliations: list) -> list:
 async def search_pubmed(
     query: str,
     search_type: str = "author",
-    max_results: int = 20
+    max_results: Optional[int] = None
 ) -> dict:
     """
     Search PubMed database for publications.
@@ -1404,6 +1446,10 @@ async def search_pubmed(
         # Search by keywords
         search_pubmed("ADP-ribosylation DNA repair", search_type="keywords")
     """
+    # Use config default if max_results not provided
+    if max_results is None:
+        max_results = config["DEFAULT_PUBMED_SEARCH_LIMIT"]
+        
     # Validate parameters
     max_results = min(max(max_results, 1), 50)  # Cap at 50 for performance
     valid_types = ["author", "doi", "title", "keywords"]
@@ -1464,7 +1510,7 @@ async def pubmed_author_sample(
 # ORCID Integration Functions
 # ============================================================================
 
-async def search_orcid_by_name(name: str, affiliation: str = None, max_results: int = 10) -> dict:
+async def search_orcid_by_name(name: str, affiliation: str = None, max_results: int = 5) -> dict:
     """
     Search ORCID by author name and optionally affiliation.
     
@@ -1561,7 +1607,7 @@ async def search_orcid_by_name(name: str, affiliation: str = None, max_results: 
         return {'total_found': 0, 'results_returned': 0, 'results': [], 'error': str(e)}
 
 
-async def get_orcid_works(orcid_id: str, max_works: int = 20) -> dict:
+async def get_orcid_works(orcid_id: str, max_works: int = 5) -> dict:
     """
     Get works/publications for a specific ORCID ID.
     
@@ -1662,7 +1708,7 @@ async def get_orcid_works(orcid_id: str, max_works: int = 20) -> dict:
 async def search_orcid_authors(
     name: str,
     affiliation: str = None,
-    max_results: int = 10
+    max_results: Optional[int] = None
 ) -> dict:
     """
     Search ORCID for author profiles by name and affiliation.
@@ -1685,6 +1731,10 @@ async def search_orcid_authors(
         # Search with affiliation for better disambiguation
         search_orcid_authors("Maria Garcia", "University of Barcelona")
     """
+    # Use config default if max_results not provided
+    if max_results is None:
+        max_results = config["DEFAULT_ORCID_SEARCH_LIMIT"]
+        
     # Validate parameters
     max_results = min(max(max_results, 1), 50)  # ORCID API limit
     
@@ -1706,7 +1756,7 @@ async def search_orcid_authors(
 )
 async def get_orcid_publications(
     orcid_id: str,
-    max_works: int = 20
+    max_works: Optional[int] = None
 ) -> dict:
     """
     Get publications/works from an ORCID profile.
@@ -1728,6 +1778,10 @@ async def get_orcid_publications(
         # Get limited number of works
         get_orcid_publications("0000-0000-0000-0000", max_works=10)
     """
+    # Use config default if max_works not provided
+    if max_works is None:
+        max_works = config["DEFAULT_ORCID_WORKS_LIMIT"]
+        
     # Validate parameters
     max_works = min(max(max_works, 1), 100)  # Reasonable limit
     
