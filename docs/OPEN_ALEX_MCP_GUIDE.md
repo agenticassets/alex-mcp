@@ -30,13 +30,14 @@ $env:OPENALEX_MAILTO = "your-email@domain.com"
 
 **Note**: Set `$env:OPENALEX_MAILTO` in your PowerShell session before using Cursor AI.
 
-## 8 Tools
+## 9 Tools
 
 ### Core Academic (OpenAlex)
 - `autocomplete_authors` ⭐ - Author disambiguation (start here)
 - `search_authors` - Full author profiles with ORCID/affiliations
 - `retrieve_author_works` - Publication history by author ID
 - `search_works` - Find papers by topic/keywords
+- `get_work_by_id` - Retrieve single paper by OpenAlex ID
 
 ### Medical (PubMed)
 - `search_pubmed` - Medical literature search
@@ -60,6 +61,9 @@ works = await retrieve_author_works("https://openalex.org/A5090973432")
 
 # Paper search
 papers = await search_works("real estate AI", limit=10)
+
+# Get specific paper by ID
+paper = await get_work_by_id("W2741809807")
 
 # Medical research
 pubmed = await search_pubmed("machine learning", max_results=5)
@@ -104,4 +108,4 @@ search_authors("John Smith", limit=25)     # Returns 25 authors (overrides env v
 search_works("AI research", limit=50)      # Returns 50 papers (overrides env var)
 ```
 
-## Status: ✅ All 8 tools operational (<500ms)
+## Status: ✅ All 9 tools operational (<500ms)

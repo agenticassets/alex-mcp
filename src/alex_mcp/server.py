@@ -603,8 +603,8 @@ def search_works_core(
         if type:
             filters['type'] = type
         elif peer_reviewed_only:
-            # Focus on journal articles and letters for academic work
-            filters['type'] = 'article|letter'
+            # Focus on journal articles for academic work
+            filters['type'] = 'article'
         
         # Add basic quality filters
         if peer_reviewed_only:
@@ -698,8 +698,8 @@ def retrieve_author_works_core(
         if type:
             filters["type"] = type
         elif journal_only:
-            # Focus on journal articles and letters for academic work
-            filters["type"] = "article|letter"
+            # Focus on journal articles for academic work
+            filters["type"] = "article"
         if min_citations:
             filters["cited_by_count"] = f">={min_citations}"
         
@@ -789,6 +789,56 @@ def retrieve_author_works_core(
             results=[],
             filters={}
         )
+
+
+def get_work_by_id_core(
+    work_id: str,
+    include_abstract: bool = False
+) -> Optional[OptimizedWorkResult]:
+    """
+    Core logic to retrieve a single work by its OpenAlex ID.
+    Returns streamlined work data to minimize token usage.
+
+    Args:
+        work_id: OpenAlex work ID (e.g., "W1234567890")
+        include_abstract: If True, include full paper abstract when available (default: False)
+
+    Returns:
+        OptimizedWorkResult: Streamlined work data, or None if not found.
+    """
+    try:
+        # Clean and format the work ID
+        clean_id = work_id.strip()
+        
+        # Remove URL prefix if present
+        if clean_id.startswith("https://openalex.org/"):
+            clean_id = clean_id.replace("https://openalex.org/", "")
+        
+        # Ensure it starts with W
+        if not clean_id.startswith("W"):
+            clean_id = f"W{clean_id}"
+        
+        # Build full OpenAlex URL
+        full_id = f"https://openalex.org/{clean_id}"
+        
+        logger.info(f"Retrieving work: {full_id}")
+        
+        # Get the work using PyAlex
+        work = pyalex.Works()[full_id]
+        
+        if not work:
+            logger.warning(f"Work not found: {full_id}")
+            return None
+        
+        # Convert to optimized format
+        optimized_work = optimize_work_data(work, include_abstract=include_abstract)
+        
+        logger.info(f"Successfully retrieved work: {optimized_work.title}")
+        return optimized_work
+        
+    except Exception as e:
+        logger.error(f"Error retrieving work {work_id}: {e}")
+        return None
 
 
 @mcp.tool(
@@ -977,6 +1027,59 @@ async def search_works(
         include_abstract=include_abstract
     )
     return response.model_dump()
+
+
+@mcp.tool(
+    annotations={
+        "title": "Get Work by ID",
+        "description": (
+            "Retrieve a single academic work by its OpenAlex ID. "
+            "Returns streamlined work data optimized for AI agents with ~80% fewer tokens. "
+            "Includes essential info: title, authors, journal, citations, DOI, and optionally abstract. "
+            "Perfect for getting detailed information about a specific paper when you have its OpenAlex ID."
+        ),
+        "readOnlyHint": True,
+        "openWorldHint": True
+    }
+)
+async def get_work_by_id(
+    work_id: str,
+    include_abstract: bool = False
+) -> dict:
+    """
+    Retrieve a single work by its OpenAlex ID.
+
+    Args:
+        work_id: OpenAlex work ID (e.g., "W1234567890", "1234567890", or full URL)
+        include_abstract: If True, include full paper abstract when available (default: False)
+
+    Returns:
+        dict: Serialized OptimizedWorkResult with work details, or error if not found.
+        
+    Usage Examples:
+        # Get basic work info
+        get_work_by_id("W2741809807")
+        
+        # Get work with abstract
+        get_work_by_id("W2741809807", include_abstract=True)
+        
+        # Works with various ID formats
+        get_work_by_id("2741809807")  # Missing W prefix
+        get_work_by_id("https://openalex.org/W2741809807")  # Full URL
+    """
+    result = get_work_by_id_core(work_id, include_abstract)
+    
+    if result is None:
+        return {
+            "error": f"Work not found: {work_id}",
+            "work_id": work_id,
+            "success": False
+        }
+    
+    return {
+        "success": True,
+        "work": result.model_dump()
+    }
 
 
 @mcp.tool(

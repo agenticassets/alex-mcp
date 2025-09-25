@@ -41,7 +41,7 @@ Add to your `mcp.json`:
 export OPENALEX_MAILTO=your-email@domain.com
 ```
 
-## 🛠️ Available Tools
+## 🛠️ Available Tools (9 Total)
 
 ### Academic Research Core
 
@@ -90,6 +90,16 @@ papers = await search_works(
     include_abstract=True  # optional: include full paper abstracts
 )
 # Returns: Peer-reviewed papers with full metadata (optionally includes abstracts)
+```
+
+#### `get_work_by_id`
+**Purpose**: Retrieve a single paper by OpenAlex ID
+```python
+paper = await get_work_by_id(
+    work_id="W2741809807",  # accepts "W1234567890", "1234567890", or full URL
+    include_abstract=True  # optional: include full paper abstract
+)
+# Returns: Single work with complete metadata, DOI, citations, journal info
 ```
 
 ### Medical Research (PubMed)
@@ -300,7 +310,7 @@ OPENALEX_USER_AGENT=research-agent-v1.0
 
 ---
 
-**Status**: ✅ All 8 tools tested and operational
+**Status**: ✅ All 9 tools tested and operational
 **Performance**: <500ms response times
 **Data Sources**: OpenAlex, PubMed, ORCID
 **Compatibility**: Cursor AI, Claude Desktop, OpenAI Agents

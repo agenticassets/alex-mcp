@@ -9,7 +9,31 @@ alwaysApply: true
 ## Configuration
 **Email**: `$env:OPENALEX_MAILTO` - Set this environment variable for OpenAlex API requests
 
-## OpenAlex Academic Tools
+## OpenAlex Academic Tools: Most Important Tools
+
+### `search_works`
+**Purpose**: Find academic papers by topic
+**Parameters**:
+- `query` (str): Search query
+- `author` (str, optional): Author filter
+- `institution` (str, optional): Institution filter
+- `publication_year` (int, optional): Year filter
+- `type` (str, optional): Work type filter
+- `limit` (int, optional): Max results (1-100, default: 5)
+- `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
+- `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
+- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
+**Returns**: Peer-reviewed papers with full metadata, and optionally abstracts
+
+### `get_work_by_id`
+**Purpose**: Retrieve a single paper by OpenAlex ID
+**Parameters**:
+- `work_id` (str): OpenAlex work ID (e.g., "W1234567890", "1234567890", or full URL)
+- `include_abstract` (bool, optional): Include full paper abstract (default: false)
+**Returns**: Single work with complete metadata, DOI, citations, journal info
+**Usage**: `get_work_by_id("W2741809807")` or `get_work_by_id("2741809807")`
+
+## Additional OpenAlex Tools
 
 ### `autocomplete_authors`
 **Purpose**: Fast author disambiguation with institutional context
@@ -42,20 +66,6 @@ alwaysApply: true
 - `peer_reviewed_only` (bool, optional): If True, apply balanced peer-review filters (default: True)
 - `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
 **Returns**: Publications with DOIs, journals, citations, topics, and optionally abstracts
-
-### `search_works`
-**Purpose**: Find academic papers by topic
-**Parameters**:
-- `query` (str): Search query
-- `author` (str, optional): Author filter
-- `institution` (str, optional): Institution filter
-- `publication_year` (int, optional): Year filter
-- `type` (str, optional): Work type filter
-- `limit` (int, optional): Max results (1-100, default: 5)
-- `peer_reviewed_only` (bool, optional): Journal articles only (default: true)
-- `search_type` (str, optional): Search mode - "general", "title", or "title_and_abstract" (default: "general")
-- `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
-**Returns**: Peer-reviewed papers with full metadata, and optionally abstracts
 
 ## ORCID Identity Tools
 
@@ -129,10 +139,12 @@ alwaysApply: true
 - **For Finding Specific Papers**: Start with key authors in field → get their works → scan results for target paper
 - **For Topic Exploration**: Use keyword searches → filter by year if needed → check abstracts for relevance
 - **For Literature Reviews**: Find key authors in field → get their complete works → use keywords to find related papers → cross-reference
+- **For Known Paper IDs**: Use `get_work_by_id("W1234567890")` for direct retrieval when you have the OpenAlex ID
 
 ## Usage Workflow
 1. Start with `autocomplete_authors` for disambiguation
 2. Use `search_authors` for detailed profiles
 3. Call `retrieve_author_works` for publications
 4. Use `search_works` for topic-based research
-5. Leverage `get_orcid_publications` for verified works
+5. Use `get_work_by_id` when you have specific OpenAlex work IDs
+6. Leverage `get_orcid_publications` for verified works

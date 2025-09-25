@@ -58,6 +58,14 @@ All function limits can be customized via environment variables in your `mcp.jso
 - `include_abstract` (bool, optional): Include full paper abstracts when available (default: false)
 **Returns**: Peer-reviewed papers with full metadata (optionally includes abstracts)
 
+### `get_work_by_id`
+**Purpose**: Retrieve a single paper by OpenAlex ID
+**Parameters**:
+- `work_id` (str): OpenAlex work ID (accepts "W1234567890", "1234567890", or full URL)
+- `include_abstract` (bool, optional): Include full paper abstract (default: false)
+**Returns**: Single work with complete metadata, DOI, citations, journal info
+**Usage**: `get_work_by_id("W2741809807")` or `get_work_by_id("2741809807")`
+
 ## ORCID Identity Tools
 
 ### `search_orcid_authors`
@@ -137,9 +145,12 @@ You can customize default limits by adding environment variables to your `mcp.js
 - `search_authors("John Smith", limit=25)` → Uses explicit parameter (25)
 - If no env var set → Uses hardcoded default (5)
 
-## Usage Workflow
-1. Start with `autocomplete_authors` for disambiguation
-2. Use `search_authors` for detailed profiles
-3. Call `retrieve_author_works` for publications
-4. Use `search_works` for topic-based research
-5. Leverage `get_orcid_publications` for verified works
+## Usage Workflows
+
+### Citation Validation Workflow
+**Recommended for validating academic citations:**
+1. **Discovery**: Use `search_works(query="Author Year key terms", limit=1)` to find papers
+2. **Validation**: Use `get_work_by_id(work_id="W123456789", include_abstract=true)` for detailed verification
+3. **Note**: Use `get_work_by_id` specifically, NOT `get_orcid_publications` for citation validation
+
+
